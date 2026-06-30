@@ -13,6 +13,7 @@ dependencies = [
     # LLM Clients
     "anthropic>=0.25.0",
     "openai>=1.12.0",
+    "google-genai>=1.0.0",
     # Embedding & Vector DB
     "chromadb>=0.4.24",
     # Data Processing
@@ -27,7 +28,14 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
 ]
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocs-awesome-pages-plugin>=2.9.0",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src", "api"]

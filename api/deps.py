@@ -55,7 +55,8 @@ def get_llm_client(config: PipelineConfig | None = None) -> LLMClient:
     cfg = config or get_config()
     client = LLMClient(provider=cfg.llm_provider, model=cfg.llm_model)
     import os
-    api_key = os.getenv("ANTHROPIC_API_KEY", "") if cfg.llm_provider == "anthropic" else os.getenv("OPENAI_API_KEY", "")
+    env_var = LLMClient.PROVIDER_API_KEY_ENV.get(cfg.llm_provider, "")
+    api_key = os.getenv(env_var, "")
     client.setup(api_key=api_key)
     return client
 
