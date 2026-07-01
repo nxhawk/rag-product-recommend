@@ -10,6 +10,8 @@ rag-product-recommend/
 ├── CLAUDE.md                   # AI context & coding rules
 │
 ├── src/                        # Core business logic
+│   ├── crawler/                # Web crawling (raw data collection)
+│   │   └── spiders/            #   One spider per source (tgdd, cellphones)
 │   ├── ingestion/              # Data loading & normalization
 │   ├── embedding/              # Embedding & Vector DB
 │   ├── retrieval/              # Product retrieval & search
@@ -54,6 +56,31 @@ rag-product-recommend/
 ## `src/` — Core Business Logic
 
 All domain logic lives here. This is a pure Python package with no web framework dependency — it can be used independently of FastAPI.
+
+### `src/crawler/` — Web Crawling
+
+**Purpose:** Collect raw product data (specs + buyer reviews) from e-commerce sites into `data/raw/crawled/`. Lightweight stack: `httpx` + `BeautifulSoup`. See the [Crawler guide](../development/crawler.md) for the full flow.
+
+| File | Purpose | When to add/update |
+| ---- | ------- | ------------------- |
+| `config.py` | `CrawlerConfig` / `SourceConfig` — loaded from `configs/crawler.yaml` (sources, politeness, `fetch_reviews`, `max_products`) | When adding a config knob or a new source block |
+| `http_client.py` | `httpx` wrapper with retries (tenacity), rate limiting, and robots.txt checks; sync + concurrent async fetch | When changing HTTP behavior (headers, retry policy, concurrency) |
+| `rate_limiter.py` | Minimum delay between requests to the same host (sync + async) | When changing the politeness strategy |
+| `robots.py` | Fetches and caches `robots.txt` rules per host | When changing robots handling |
+| `parser.py` | Shared BeautifulSoup helpers: price/rating, spec-group grouping (`parse_spec_groups`, `canonical_spec_group`), robust review extraction (`star_rating`, `review_content`), review JSON helpers | When adding a shared parsing helper |
+| `models.py` | `CrawledProduct` (incl. `specifications`, `spec_groups`, `reviews`), `Review`, `CrawlResult` dataclasses | When adding a field to the crawl output schema |
+| `storage.py` | Writes results to `data/raw/crawled/<source>/` (`<timestamp>.json` + `latest.json`) | When changing the output layout |
+| `pipeline.py` | `CrawlPipeline` orchestrates a spider end-to-end: discover → fetch → parse → store | When changing the crawl orchestration |
+
+**`src/crawler/spiders/`** — One spider per source. Subclass `BaseSpider` and implement `build_list_url`, `parse_list`, `parse_detail`; optionally override the review hooks (`parse_reviews`, `parse_reviews_payload`) and register in `SPIDER_REGISTRY`.
+
+| File | Purpose | When to add/update |
+| ---- | ------- | ------------------- |
+| `base_spider.py` | Abstract spider: pagination (`discover`), concurrent detail fetch, grouped-spec + review collection, error capture | When changing shared spider behavior |
+| `tgdd_spider.py` | Spider for thegioididong.com | When TGDĐ markup changes |
+| `cellphones_spider.py` | Spider for cellphones.com.vn | When CellphoneS markup changes |
+
+**When to add a new file:** When crawling a new source — add `<name>_spider.py` and a `SourceConfig` block in `configs/crawler.yaml`.
 
 ### `src/ingestion/` — Data Loading & Normalization
 
@@ -224,6 +251,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 | File | Purpose | When to add/update |
 | ---- | ------- | ------------------- |
+| `crawl.py` | Crawl raw product data into `data/raw/crawled/` (`--source`, `--category`, `--all`) | When changing crawl CLI options or adding a source |
 | `ingest.py` | Full ingestion pipeline: load → clean → chunk → embed → store in ChromaDB | When changing the ingestion flow or adding new data sources |
 | `seed.py` | Generate sample product data for development/testing | When adding new product categories or changing sample data schema |
 
@@ -238,6 +266,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 | File | Purpose | When to add/update |
 | ---- | ------- | ------------------- |
 | `settings.yaml` | Main pipeline config — LLM provider, embedding model, vector DB, retrieval params | When changing any pipeline parameter |
+| `crawler.yaml` | Crawler sources, politeness, review + volume settings (`fetch_reviews`, `max_products`, `max_pages`) | When adding a source or tuning crawl behavior |
 | `product_categories.yaml` | Product category definitions with required fields per category | When supporting a new product category (e.g., cameras, monitors) |
 | `scoring_weights.yaml` | Scoring weights per use case (e.g., gaming prioritizes performance, photography prioritizes camera) | When tuning recommendation quality for specific use cases |
 
@@ -255,7 +284,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 | `getting-started/` | Installation, quickstart, development guide | When setup steps change |
 | `architecture/` | System overview, pipeline flow, project structure | When architecture changes |
 | `api/` | API endpoints and schema reference | When API contract changes |
-| `development/` | Contributing guide, testing guide | When development workflow changes |
+| `development/` | Contributing guide, crawler guide, testing guide | When development workflow changes |
 
 **When to add a new file:** When documenting a new major feature or adding a new section (e.g., `deployment/` for production deployment guides). Remember to add the page to `mkdocs.yml` nav.
 
@@ -279,6 +308,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 | Path | Content | Git status | When to update |
 | ---- | ------- | ---------- | -------------- |
 | `raw/products/` | Original product data (JSON, CSV) | Tracked | When adding new product data files |
+| `raw/crawled/` | Raw crawler output per source (`<timestamp>.json` + `latest.json`) | Gitignored | Auto-generated by `scripts/crawl.py` |
 | `processed/` | Cleaned and normalized data (output of `data_cleaner.py`) | Gitignored | Auto-generated by ingestion pipeline |
 | `embeddings/` | ChromaDB persist directory | Gitignored | Auto-generated by `scripts/ingest.py` — do not edit manually |
 

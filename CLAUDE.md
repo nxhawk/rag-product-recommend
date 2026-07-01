@@ -32,6 +32,20 @@ rag-product-recommend/
 ├── uv.lock                     # Lockfile
 │
 ├── src/                        # Core business logic
+│   ├── crawler/                # Web crawling (raw data collection)
+│   │   ├── config.py           #   CrawlerConfig / SourceConfig (crawler.yaml)
+│   │   ├── http_client.py      #   httpx client: retry + rate limit + robots
+│   │   ├── rate_limiter.py     #   Polite delay between requests
+│   │   ├── robots.py           #   robots.txt checker
+│   │   ├── parser.py           #   BeautifulSoup helpers (price/rating/text)
+│   │   ├── models.py           #   CrawledProduct / CrawlResult dataclasses
+│   │   ├── storage.py          #   Save raw results to data/raw/crawled
+│   │   ├── pipeline.py         #   CrawlPipeline: spider → product → store
+│   │   └── spiders/            #   One spider per source
+│   │       ├── base_spider.py  #     BaseSpider (list + detail hooks)
+│   │       ├── tgdd_spider.py  #     thegioididong.com
+│   │       └── cellphones_spider.py # cellphones.com.vn
+│   │
 │   ├── ingestion/              # Data loading & normalization
 │   │   ├── product_loader.py   #   Load from JSON/CSV
 │   │   ├── review_loader.py    #   Load user reviews
@@ -105,11 +119,13 @@ rag-product-recommend/
 │   └── test_cases.json
 │
 ├── scripts/                    # CLI scripts
+│   ├── crawl.py                #   Crawl raw data into data/raw/crawled
 │   ├── ingest.py               #   Ingest data into vector store
 │   └── seed.py                 #   Seed sample data
 │
 ├── configs/
 │   ├── settings.yaml
+│   ├── crawler.yaml            #   Crawler sources & politeness settings
 │   ├── product_categories.yaml
 │   └── scoring_weights.yaml
 │
@@ -119,6 +135,7 @@ rag-product-recommend/
 │
 └── data/
     ├── raw/products/
+    ├── raw/crawled/            #   Raw crawler output (gitignored)
     ├── processed/
     └── embeddings/             # ChromaDB persist (gitignored)
 ```

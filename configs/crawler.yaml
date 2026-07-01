@@ -1,0 +1,47 @@
+# Crawler Settings
+# Loaded by src/crawler/config.py -> CrawlerConfig.from_yaml()
+
+# HTTP client
+user_agent: "Mozilla/5.0 (compatible; RagProductBot/0.1; +https://github.com/nxhawk/rag-product-recommend)"
+timeout: 20.0
+max_retries: 3
+retry_backoff: 1.5
+
+# Politeness
+request_delay: 1.0        # seconds between requests to the same host
+respect_robots: true
+
+# Concurrency for detail-page fetching
+concurrency: 4
+
+# Reviews
+fetch_reviews: true       # collect buyer reviews alongside specs
+max_reviews: 20           # cap reviews kept per product
+
+# Output
+output_dir: "data/raw/crawled"
+
+# Sources. Each category value is a listing path template; {page} is the page number.
+# reviews_url (optional): review endpoint template. Placeholders: {product_id}, {slug}, {page}.
+#   Leave unset to only parse reviews embedded in the detail-page HTML.
+#   VERIFY the real endpoint against the live site before enabling.
+sources:
+  tgdd:
+    base_url: "https://www.thegioididong.com"
+    enabled: true
+    max_pages: 8          # walk more listing pages to reach max_products
+    max_products: 100     # up to 100 products per run
+    categories:
+      smartphone: "/dtdd?page={page}"
+      laptop: "/laptop?page={page}"
+    # reviews_url: "https://www.thegioididong.com/aj/comment/get?slug={slug}&page={page}"
+
+  cellphones:
+    base_url: "https://cellphones.com.vn"
+    enabled: true
+    max_pages: 8          # walk more listing pages to reach max_products
+    max_products: 100     # up to 100 products per run
+    categories:
+      smartphone: "/mobile.html?p={page}"
+      laptop: "/laptop.html?p={page}"
+    # reviews_url: "https://cellphones.com.vn/api/reviews?slug={slug}&page={page}"

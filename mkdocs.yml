@@ -73,4 +73,5 @@ nav:
       - Docker: deployment/docker.md
   - Development:
       - Contributing: development/contributing.md
+      - Crawler: development/crawler.md
       - Testing: development/testing.md
