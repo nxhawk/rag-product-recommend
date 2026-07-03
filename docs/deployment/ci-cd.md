@@ -32,18 +32,19 @@ required** to get the security and CI pipelines running.
 
 ### `ci.yml` — Continuous Integration
 
-**Purpose.** The main quality gate. Blocks merges when linting, formatting, or the test
-suite fail, and produces a coverage report.
+**Purpose.** The main quality gate. Blocks merges when linting (`ruff check`) or the test
+suite fail, and produces a coverage report. Formatting and type checks run as advisory.
 
 **Triggers.** Push and pull requests targeting `main`. Concurrent runs on the same ref
 are cancelled to save minutes.
 
 **How it works.** Two jobs run in parallel:
 
-- **`lint`** — installs `uv`, then runs `ruff check` (lint) and `ruff format --check`
-  (formatting). It also runs `mypy` for type checking. Because the codebase has not
-  previously been type-checked in CI, `mypy` is marked `continue-on-error: true` so it
-  reports findings without blocking. Flip this to `false` once the types are clean.
+- **`lint`** — installs `uv`, then runs `ruff check` (lint, **blocking**), `ruff format
+  --check` (formatting) and `mypy` (type check). Because the codebase has not yet adopted
+  ruff's formatter or been type-checked in CI, both `ruff format --check` and `mypy` are
+  marked `continue-on-error: true` (advisory) — they report without blocking. Run
+  `uvx ruff format .` locally, then flip each to `false` once clean.
 - **`test`** — a matrix over Python **3.11** and **3.12**. It spins up a
   `pgvector/pgvector:pg16` **service container**, enables the `vector` extension, and
   runs `pytest` with coverage (`pytest-cov`). The coverage XML is uploaded as an
@@ -64,8 +65,9 @@ are cancelled to save minutes.
   (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`) are set to
   `test-key` so config/import code does not fail — real keys are never needed for the
   unit suite.
-- Add `[tool.ruff]` and `[tool.mypy]` sections to `pyproject.toml` to tune rules; the
-  workflow picks them up automatically.
+- `pyproject.toml` already carries a `[tool.ruff]` section (`target-version = "py311"`,
+  `line-length = 100`); extend it (or add `[tool.mypy]`) to tune rules — the workflow
+  picks them up automatically.
 - Adjust the `matrix.python-version` list to change which interpreters are tested.
 
 ---
@@ -131,8 +133,10 @@ secrets.
 
 **Configuration.** Scans `src api scripts` (tests are excluded because `assert` is
 expected there). The flags `-ll -ii` restrict output to **MEDIUM+ severity** and
-**MEDIUM+ confidence** to keep signal high. Add a `[tool.bandit]` section in
-`pyproject.toml` to skip specific checks.
+**MEDIUM+ confidence** to keep signal high. `-s B608` skips the SQL-string check: table
+names are interpolated from trusted internal config while all values use parameterized
+`%s` placeholders. The same skip is mirrored in the `[tool.bandit]` section of
+`pyproject.toml` for local runs.
 
 ### `trivy.yml` — Vulnerability & IaC Scan
 
@@ -151,7 +155,7 @@ Both upload SARIF results to the Security tab.
 
 | Type | Item |
 | ---- | ---- |
-| Actions | `aquasecurity/trivy-action@0.28.0`, `docker/setup-buildx-action@v3`, `docker/build-push-action@v6`, `github/codeql-action/upload-sarif@v3` |
+| Actions | `aquasecurity/trivy-action@v0.36.0`, `docker/setup-buildx-action@v3`, `docker/build-push-action@v6`, `github/codeql-action/upload-sarif@v3` |
 | Permissions | `security-events: write` |
 | Cache | GitHub Actions cache (`type=gha`) for the Docker build |
 | Repo setting | Code scanning enabled (for SARIF upload) |
@@ -177,8 +181,11 @@ pip-audit fails the build when a known-vulnerable version is present.
 | Tools | `uv export`, `uvx pip-audit` |
 
 **Configuration.** `uv export --frozen ... --all-groups` produces a requirements file
-from the lockfile, then `pip-audit --strict --desc` audits it. Use `--ignore-vuln <ID>`
-to accept a specific advisory that cannot yet be resolved.
+from the lockfile, then `pip-audit --strict --desc` audits it. It currently passes
+`--ignore-vuln PYSEC-2026-311` — an unfixed advisory in the unused legacy `chromadb`
+package (the project uses pgvector); run `uv lock` to drop chromadb from the lockfile,
+then remove the ignore. Add further `--ignore-vuln <ID>` flags for other advisories that
+cannot yet be resolved.
 
 ---
 
@@ -230,7 +237,9 @@ cleans up stale Pages artifacts, and uploads the site. A `deploy` job publishes 
 | Repo setting | Pages source set to **GitHub Actions** |
 
 **Configuration.** `--strict` means any broken cross-reference fails the build — keep the
-`nav` in `mkdocs.yml` in sync with the files under `docs/`.
+`nav` in `mkdocs.yml` in sync with the files under `docs/`. The `concurrency` block uses
+`cancel-in-progress: false` so an in-progress deployment finishes instead of being
+cancelled mid-deploy (which can leave Pages in a failed "try again later" state).
 
 ---
 
@@ -241,13 +250,13 @@ cleans up stale Pages artifacts, and uploads the site. A `deploy` job publishes 
 **Purpose.** Opens pull requests to keep dependencies current, reducing exposure to
 known vulnerabilities.
 
-**Ecosystems.** Three update streams, all on a weekly schedule:
+**Ecosystems.** Three update streams (`uv` and `github-actions` weekly, `docker` monthly):
 
-| Ecosystem | Directory | Watches |
-| --------- | --------- | ------- |
-| `uv` | `/` | `pyproject.toml` + `uv.lock` (native uv support) |
-| `github-actions` | `/` | Action versions in `.github/workflows/` |
-| `docker` | `/docker` | Base image in `docker/Dockerfile` |
+| Ecosystem | Directory | Schedule | Watches |
+| --------- | --------- | -------- | ------- |
+| `uv` | `/` | weekly | `pyproject.toml` + `uv.lock` (native uv support) |
+| `github-actions` | `/` | weekly | Action versions in `.github/workflows/` |
+| `docker` | `/docker` | monthly | Base image in `docker/Dockerfile` |
 
 **Configuration.** Python minor/patch updates are grouped into a single PR to reduce
 noise; labels (`dependencies`, `python`, etc.) are applied automatically. The `uv`

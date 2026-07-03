@@ -148,3 +148,35 @@ rag-product-recommend/
 - **Prompt templates**: Stored as module-level constants (`SYSTEM_PROMPT`, `USER_PROMPT_TEMPLATE`) in `src/generation/prompt_templates/`.
 - **API dependencies**: Use factory functions in `api/deps.py` (e.g. `get_retriever()`, `get_llm_client()`).
 - **User-facing text**: Vietnamese. Code/comments/docstrings: English.
+
+## CI / Workflow Compliance (MANDATORY)
+
+Any code you generate or edit MUST pass the GitHub Actions workflows in `.github/workflows/`
+**before it is considered done**. Do not hand back code that would turn the CI red. When you
+finish a change, mentally (or actually) run the local equivalents below and fix anything they
+would flag.
+
+- **Lint — `ci.yml` (ruff).** No unused imports (`F401`) or unused variables (`F841`); no
+  undefined names. Verify with `uvx ruff check .`. Run `uvx ruff format .` so formatting is
+  clean too.
+- **Type check — `ci.yml` (mypy).** Keep full type hints on signatures; avoid new type errors
+  even though the step is currently advisory (`uv run --with mypy mypy src api`).
+- **Tests — `ci.yml` (pytest).** Existing tests must still pass and new logic needs tests.
+  Verify with `uv run pytest tests/`. Tests must not require real secrets or a live network.
+- **Security — `bandit.yml`.** No MEDIUM+ findings. Specifically: use `hashlib.md5(..., usedforsecurity=False)`
+  for non-security hashing; build SQL with parameterized `%s` placeholders (never interpolate
+  user input); only trusted, internal identifiers may be interpolated. Verify with
+  `uvx bandit -r src api scripts -ll -ii -s B608`.
+- **Secrets — `gitleaks.yml`.** Never commit API keys, tokens, passwords, or `.env`. Read secrets
+  from environment variables; keep `.env` gitignored and use `.env.example` for placeholders.
+- **Dependencies — `pip-audit.yml` + Dependabot.** Add/remove deps only via `uv add` / `uv remove`,
+  then keep `uv.lock` in sync with `uv lock`. Do not introduce vulnerable or unused packages;
+  after changing dependencies run `uvx pip-audit`.
+- **SAST / containers — `codeql.yml`, `trivy.yml`.** Avoid injection-prone patterns (unsafe
+  `subprocess`, `eval`, unsanitized SQL/paths) and follow Dockerfile best practices.
+- **Docs — `docs.yml`.** Docs must build with `uv run mkdocs build --strict` (fails on broken
+  links/nav). Keep `nav` in `mkdocs.yml` in sync with files under `docs/`, and add a matching
+  `.vi.md` for every new English page.
+
+Rule of thumb: if `uvx ruff check .`, `uvx bandit -r src api scripts -ll -ii -s B608`,
+`uv run pytest tests/`, and `uv run mkdocs build --strict` would all pass, the change is ready.

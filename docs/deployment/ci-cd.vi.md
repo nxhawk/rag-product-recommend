@@ -32,18 +32,19 @@ nào** để chạy các pipeline bảo mật và CI.
 
 ### `ci.yml` — Continuous Integration
 
-**Mục đích.** Cổng kiểm tra chất lượng chính. Chặn merge khi lint, format hoặc bộ test
-thất bại, đồng thời tạo báo cáo coverage.
+**Mục đích.** Cổng kiểm tra chất lượng chính. Chặn merge khi lint (`ruff check`) hoặc bộ
+test thất bại, đồng thời tạo báo cáo coverage. Format và type check chạy ở mức advisory.
 
 **Kích hoạt.** Push và pull request nhắm vào `main`. Các lần chạy trùng trên cùng một ref
 sẽ bị hủy để tiết kiệm thời gian.
 
 **Cách hoạt động.** Hai job chạy song song:
 
-- **`lint`** — cài `uv`, sau đó chạy `ruff check` (lint) và `ruff format --check`
-  (format). Ngoài ra chạy `mypy` để type check. Vì codebase chưa từng được type-check
-  trong CI, `mypy` để `continue-on-error: true` nên chỉ báo cáo mà không chặn build.
-  Đổi thành `false` khi types đã sạch.
+- **`lint`** — cài `uv`, sau đó chạy `ruff check` (lint, **chặn build**), `ruff format
+  --check` (format) và `mypy` (type check). Vì codebase chưa áp dụng formatter của ruff
+  cũng như chưa từng type-check trong CI, cả `ruff format --check` và `mypy` đều để
+  `continue-on-error: true` (advisory) — chỉ báo cáo, không chặn build. Chạy
+  `uvx ruff format .` ở máy, rồi đổi từng cái thành `false` khi đã sạch.
 - **`test`** — matrix qua Python **3.11** và **3.12**. Job khởi động một **service
   container** `pgvector/pgvector:pg16`, bật extension `vector`, rồi chạy `pytest` kèm
   coverage (`pytest-cov`). File coverage XML được upload làm artifact.
@@ -62,8 +63,9 @@ sẽ bị hủy để tiết kiệm thời gian.
 - Biến `DATABASE_URL` trỏ test tới service container. Các key LLM giả
   (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`) được đặt
   `test-key` để code đọc config/import không lỗi — bộ unit test không cần key thật.
-- Thêm mục `[tool.ruff]` và `[tool.mypy]` vào `pyproject.toml` để tùy chỉnh rule;
-  workflow tự động áp dụng.
+- `pyproject.toml` đã có sẵn mục `[tool.ruff]` (`target-version = "py311"`,
+  `line-length = 100`); mở rộng nó (hoặc thêm `[tool.mypy]`) để tùy chỉnh rule — workflow
+  tự động áp dụng.
 - Sửa danh sách `matrix.python-version` để đổi phiên bản Python được test.
 
 ---
@@ -127,7 +129,9 @@ parse XML không an toàn, dùng `subprocess` sai, và secret hardcode.
 
 **Cấu hình.** Quét `src api scripts` (loại trừ tests vì `assert` là bình thường ở đó). Cờ
 `-ll -ii` giới hạn kết quả ở **severity từ MEDIUM** và **confidence từ MEDIUM** để giữ tín
-hiệu cao. Thêm mục `[tool.bandit]` trong `pyproject.toml` để bỏ qua check cụ thể.
+hiệu cao. `-s B608` bỏ qua check chuỗi SQL: table name được nội suy từ config nội bộ tin
+cậy, còn mọi giá trị đều truyền qua placeholder `%s`. Cùng skip này được ghi lại trong mục
+`[tool.bandit]` của `pyproject.toml` để chạy local đồng nhất.
 
 ### `trivy.yml` — Quét Lỗ hổng & IaC
 
@@ -146,7 +150,7 @@ Cả hai upload kết quả SARIF lên tab Security.
 
 | Loại | Thành phần |
 | ---- | ---------- |
-| Actions | `aquasecurity/trivy-action@0.28.0`, `docker/setup-buildx-action@v3`, `docker/build-push-action@v6`, `github/codeql-action/upload-sarif@v3` |
+| Actions | `aquasecurity/trivy-action@v0.36.0`, `docker/setup-buildx-action@v3`, `docker/build-push-action@v6`, `github/codeql-action/upload-sarif@v3` |
 | Quyền | `security-events: write` |
 | Cache | GitHub Actions cache (`type=gha`) cho bước build Docker |
 | Cài đặt repo | Bật code scanning (để upload SARIF) |
@@ -171,8 +175,10 @@ làm fail build khi có phiên bản đã biết lỗ hổng.
 | Công cụ | `uv export`, `uvx pip-audit` |
 
 **Cấu hình.** `uv export --frozen ... --all-groups` tạo file requirements từ lockfile, rồi
-`pip-audit --strict --desc` audit nó. Dùng `--ignore-vuln <ID>` để chấp nhận một advisory
-cụ thể chưa thể xử lý.
+`pip-audit --strict --desc` audit nó. Hiện đang truyền `--ignore-vuln PYSEC-2026-311` — một
+advisory chưa có bản vá trong package `chromadb` cũ không còn dùng (project dùng pgvector);
+chạy `uv lock` để loại chromadb khỏi lockfile rồi bỏ dòng ignore đi. Thêm các cờ
+`--ignore-vuln <ID>` khác cho những advisory chưa thể xử lý.
 
 ---
 
@@ -221,7 +227,9 @@ site. Job `deploy` publish nó lên environment `github-pages`.
 | Cài đặt repo | Nguồn Pages đặt là **GitHub Actions** |
 
 **Cấu hình.** `--strict` nghĩa là bất kỳ tham chiếu chéo hỏng nào cũng làm fail build —
-giữ `nav` trong `mkdocs.yml` đồng bộ với các file trong `docs/`.
+giữ `nav` trong `mkdocs.yml` đồng bộ với các file trong `docs/`. Khối `concurrency` dùng
+`cancel-in-progress: false` để lần deploy đang chạy được hoàn tất thay vì bị hủy giữa chừng
+(việc hủy dễ khiến Pages rơi vào trạng thái lỗi "try again later").
 
 ---
 
@@ -232,13 +240,13 @@ giữ `nav` trong `mkdocs.yml` đồng bộ với các file trong `docs/`.
 **Mục đích.** Mở pull request để giữ dependency luôn mới, giảm rủi ro từ các lỗ hổng đã
 biết.
 
-**Ecosystem.** Ba luồng cập nhật, đều theo lịch hàng tuần:
+**Ecosystem.** Ba luồng cập nhật (`uv` và `github-actions` hàng tuần, `docker` hàng tháng):
 
-| Ecosystem | Thư mục | Theo dõi |
-| --------- | ------- | -------- |
-| `uv` | `/` | `pyproject.toml` + `uv.lock` (hỗ trợ uv gốc) |
-| `github-actions` | `/` | Phiên bản action trong `.github/workflows/` |
-| `docker` | `/docker` | Base image trong `docker/Dockerfile` |
+| Ecosystem | Thư mục | Lịch | Theo dõi |
+| --------- | ------- | ---- | -------- |
+| `uv` | `/` | hàng tuần | `pyproject.toml` + `uv.lock` (hỗ trợ uv gốc) |
+| `github-actions` | `/` | hàng tuần | Phiên bản action trong `.github/workflows/` |
+| `docker` | `/docker` | hàng tháng | Base image trong `docker/Dockerfile` |
 
 **Cấu hình.** Cập nhật minor/patch của Python được gộp vào một PR để giảm nhiễu; label
 (`dependencies`, `python`, ...) được gắn tự động. Ecosystem `uv` đọc trực tiếp `uv.lock`
