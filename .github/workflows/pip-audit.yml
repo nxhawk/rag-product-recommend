@@ -35,5 +35,8 @@ jobs:
       - name: Export locked requirements
         run: uv export --frozen --format requirements-txt --no-emit-project --all-groups -o requirements.txt
 
+      # PYSEC-2026-311 (chromadb): no fix released; chromadb is a leftover, unused
+      # dependency (project uses pgvector, no `import chromadb` anywhere). Interim
+      # ignore — run `uv lock` locally to drop chromadb from uv.lock, then remove this.
       - name: Run pip-audit
-        run: uvx pip-audit -r requirements.txt --strict --desc
+        run: uvx pip-audit -r requirements.txt --strict --desc --ignore-vuln PYSEC-2026-311

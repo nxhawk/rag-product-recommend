@@ -16,8 +16,10 @@ permissions:
   actions: write
 
 concurrency:
+  # Let an in-progress Pages deployment finish instead of cancelling it —
+  # cancelling mid-deploy can leave it in a failed state ("try again later").
   group: "pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
