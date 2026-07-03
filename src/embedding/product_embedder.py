@@ -1,7 +1,6 @@
 """
 Product Embedder - Tạo embeddings cho product chunks.
 """
-from typing import Optional
 
 
 class ProductEmbedder:

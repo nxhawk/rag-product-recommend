@@ -3,7 +3,7 @@ Parser - Các hàm tiện ích parse HTML dùng chung (BeautifulSoup).
 """
 import json
 import re
-from typing import Any, Optional
+from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 

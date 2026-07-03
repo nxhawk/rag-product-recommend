@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Ruff lint
+        run: uvx ruff check .
+
+      # Advisory until the codebase is adopted to ruff's formatter.
+      # Run `uvx ruff format .` locally, then set continue-on-error to false.
+      - name: Ruff format check
+        continue-on-error: true
+        run: uvx ruff format --check .
+
+      - name: Install dependencies (for type resolution)
+        run: uv sync --group dev
+
+      # mypy on an existing codebase often surfaces many findings at first.
+      # Kept non-blocking; flip continue-on-error to false once types are clean.
+      - name: Type check (mypy)
+        continue-on-error: true
+        run: uv run --with mypy mypy src api --ignore-missing-imports
+
+  test:
+    name: Tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rag_products
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Point the app at the pgvector service container.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rag_products
+      # Placeholder keys so config/import code that reads env vars does not fail.
+      # Real secrets are never needed for the unit test suite.
+      ANTHROPIC_API_KEY: test-key
+      OPENAI_API_KEY: test-key
+      GOOGLE_API_KEY: test-key
+      GEMINI_API_KEY: test-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Enable pgvector extension
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d rag_products \
+            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+      - name: Run tests with coverage
+        run: >-
+          uv run --with pytest-cov pytest tests/ -v
+          --cov=src --cov=api --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: ignore

@@ -44,3 +44,13 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src", "api"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.bandit]
+# B608: SQL table names are interpolated from trusted internal config, while all
+# runtime values are passed as parameterized %s placeholders (no user input in
+# SQL strings). Mirrors the `-s B608` skip used in .github/workflows/bandit.yml.
+skips = ["B608"]

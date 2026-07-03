@@ -1,5 +1,5 @@
 """Recommend Engine - Logic gợi ý sản phẩm chính."""
-from src.pipeline.recommend.user_intent_parser import UserIntentParser, UserIntent
+from src.pipeline.recommend.user_intent_parser import UserIntentParser
 from src.pipeline.recommend.scoring import ProductScorer
 from src.retrieval.product_retriever import ProductRetriever
 

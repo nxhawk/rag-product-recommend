@@ -5,7 +5,6 @@ Hỗ trợ: JSON, CSV, API, crawl data.
 import json
 import csv
 from pathlib import Path
-from typing import Optional
 
 
 class ProductLoader:

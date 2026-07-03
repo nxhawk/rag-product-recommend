@@ -17,7 +17,6 @@ class ProsConsExtractor:
     def _determine_best_for(self, product: dict) -> list[str]:
         """Determine which user profiles this product is best for."""
         best_for = []
-        specs = product.get("specifications", {})
         price = product.get("price", 0)
 
         if price and price < 8_000_000:

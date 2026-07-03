@@ -16,7 +16,6 @@ The base class handles pagination, concurrent detail fetching, review collection
 """
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-from typing import Optional
 
 from src.crawler.config import SourceConfig
 from src.crawler.exceptions import CrawlerError

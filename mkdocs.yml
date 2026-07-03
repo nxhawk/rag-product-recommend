@@ -84,6 +84,7 @@ plugins:
             Schemas: Schemas
             Deployment: Triển khai
             Docker: Docker
+            CI/CD: CI/CD
             Development: Phát triển
             Contributing: Đóng góp
             Crawler: Crawler
@@ -107,6 +108,7 @@ nav:
       - Schemas: api/schemas.md
   - Deployment:
       - Docker: deployment/docker.md
+      - CI/CD: deployment/ci-cd.md
   - Development:
       - Contributing: development/contributing.md
       - Crawler: development/crawler.md

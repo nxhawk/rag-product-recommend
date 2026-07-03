@@ -1,7 +1,7 @@
 """
 Recommend Engine - Logic gợi ý sản phẩm chính.
 """
-from src.recommendation.user_intent_parser import UserIntentParser, UserIntent
+from src.recommendation.user_intent_parser import UserIntentParser
 from src.recommendation.scoring import ProductScorer
 from src.retrieval.product_retriever import ProductRetriever
 

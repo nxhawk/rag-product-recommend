@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from src.crawler.models import CrawledProduct, CrawlResult
+from src.crawler.models import CrawlResult
 from src.utils.logger import setup_logger
 
 logger = setup_logger("crawler.storage")

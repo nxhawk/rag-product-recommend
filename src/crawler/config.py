@@ -6,7 +6,6 @@ src/pipeline/config.py.
 """
 import yaml
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 @dataclass

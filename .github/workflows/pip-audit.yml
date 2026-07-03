@@ -1,0 +1,39 @@
+name: Dependency Audit (pip-audit)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+  schedule:
+    # Daily so newly disclosed CVEs are caught even without code changes.
+    - cron: "0 8 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      # Resolve the exact locked versions into a requirements file, then audit
+      # against the Python Packaging Advisory Database (PyPI + OSV).
+      - name: Export locked requirements
+        run: uv export --frozen --format requirements-txt --no-emit-project --all-groups -o requirements.txt
+
+      - name: Run pip-audit
+        run: uvx pip-audit -r requirements.txt --strict --desc

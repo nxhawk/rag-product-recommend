@@ -1,8 +1,7 @@
 """Cache - Cache kết quả để tối ưu hiệu suất."""
 import hashlib
 import json
-from functools import lru_cache
-from typing import Any, Optional
+from typing import Any
 
 
 class SimpleCache:
@@ -20,4 +19,5 @@ class SimpleCache:
 
     def make_key(self, *args) -> str:
         raw = json.dumps(args, sort_keys=True, default=str)
-        return hashlib.md5(raw.encode()).hexdigest()
+        # Cache-key hashing only — not used for security, so MD5 is fine here.
+        return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()
