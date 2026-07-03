@@ -57,7 +57,7 @@ rag-product-recommend/
 │   ├── embedding/              # Embedding & Vector DB
 │   │   ├── product_embedder.py #   Text → vector (OpenAI)
 │   │   ├── multi_field_embedder.py
-│   │   └── vector_store.py     #   ChromaDB/Qdrant operations
+│   │   └── vector_store.py     #   Postgres + pgvector operations
 │   │
 │   ├── retrieval/              # Product retrieval
 │   │   ├── product_retriever.py #  Combine filter + search
@@ -136,8 +136,7 @@ rag-product-recommend/
 └── data/
     ├── raw/products/
     ├── raw/crawled/            #   Raw crawler output (gitignored)
-    ├── processed/
-    └── embeddings/             # ChromaDB persist (gitignored)
+    └── processed/
 ```
 
 ## Key Patterns
@@ -145,7 +144,7 @@ rag-product-recommend/
 - **Imports**: Always use absolute imports from project root, e.g. `from src.retrieval.filter_engine import FilterEngine`.
 - **Config**: `PipelineConfig` dataclass loaded from `configs/settings.yaml`. Access via `api/deps.py` factory functions.
 - **LLM calls**: Go through `src/generation/llm_client.py` (supports Anthropic + OpenAI). Never call LLM APIs directly.
-- **Vector DB**: Go through `src/embedding/vector_store.py`. Currently ChromaDB with cosine similarity.
+- **Vector DB**: Go through `src/embedding/vector_store.py`. Postgres + pgvector (HNSW, cosine similarity); connection via `DATABASE_URL` env var or `vector_db_url` in settings.
 - **Prompt templates**: Stored as module-level constants (`SYSTEM_PROMPT`, `USER_PROMPT_TEMPLATE`) in `src/generation/prompt_templates/`.
 - **API dependencies**: Use factory functions in `api/deps.py` (e.g. `get_retriever()`, `get_llm_client()`).
 - **User-facing text**: Vietnamese. Code/comments/docstrings: English.

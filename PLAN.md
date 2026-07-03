@@ -49,7 +49,7 @@ Người dùng hỏi bằng ngôn ngữ tự nhiên → hệ thống truy xuất
 ### 2.3 — Tạo Embeddings & Lưu Vector DB
 - [ ] `src/embedding/product_embedder.py` — Embedding từng chunk
 - [ ] `src/embedding/multi_field_embedder.py` — Embedding riêng theo field
-- [ ] `src/embedding/vector_store.py` — Kết nối ChromaDB/Qdrant, tạo collection, index metadata
+- [ ] `src/embedding/vector_store.py` — Kết nối Postgres (pgvector), tạo bảng, index metadata
 
 **Output:** Vector DB đã index toàn bộ sản phẩm, sẵn sàng truy vấn.
 
@@ -162,7 +162,7 @@ Người dùng hỏi bằng ngôn ngữ tự nhiên → hệ thống truy xuất
 | API Framework    | FastAPI                                         |
 | LLM              | Claude API / GPT-4                              |
 | Embedding        | text-embedding-3-small / bge-large-en-v1.5     |
-| Vector DB        | ChromaDB (dev) → Qdrant/Pinecone (prod)        |
+| Vector DB        | PostgreSQL + pgvector                          |
 | Cache            | Redis                                           |
 | Database         | PostgreSQL (metadata) + Vector DB (embeddings)  |
 | Container        | Docker + Docker Compose                         |

@@ -4,7 +4,7 @@ This guide covers two ways to run the project with Docker: building locally with
 
 ## Option 1 — Docker Compose (Local Build)
 
-Best for local development. Builds the image from source and starts the API server with Redis.
+Best for local development. Builds the image from source and starts the API server with Postgres (pgvector) and Redis.
 
 ### Prerequisites
 
@@ -23,11 +23,12 @@ cd docker
 docker compose up --build
 ```
 
-This starts two containers:
+This starts three containers:
 
 | Service | Port | Description |
 | ------- | ---- | ----------- |
 | **app** | `8000` | FastAPI server |
+| **postgres** | `5432` | Postgres + pgvector (vector store) |
 | **redis** | `6379` | Redis cache |
 
 The API is available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
@@ -51,14 +52,21 @@ Docker layer caching means only changed layers rebuild. Dependency changes (edit
 
 ### Data Persistence
 
-The `data/` directory is mounted as a volume, so ChromaDB vectors persist across container restarts:
+Vectors live in Postgres, persisted in the named volume `pgdata`. The `data/` directory is still mounted for raw product data:
 
 ```yaml
 volumes:
-  - ../data:/app/data
+  - ../data:/app/data   # raw data (app service)
+  - pgdata:/var/lib/postgresql/data   # vectors (postgres service)
 ```
 
-If you need a clean vector store, delete `data/embeddings/` on the host and re-run ingestion.
+If you need a clean vector store, drop the volume and re-run ingestion:
+
+```bash
+docker compose down -v   # removes pgdata
+docker compose up -d
+docker compose exec app uv run python scripts/ingest.py
+```
 
 ---
 
@@ -117,10 +125,30 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rag_products
     volumes:
       - ./data:/app/data
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rag_products
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rag_products"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   redis:
@@ -128,6 +156,9 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+
+volumes:
+  pgdata:
 ```
 
 ```bash
@@ -145,6 +176,7 @@ These variables must be set either via `--env-file`, `-e` flags, or in the `.env
 | `ANTHROPIC_API_KEY` | Yes* | Anthropic Claude API key |
 | `OPENAI_API_KEY` | Yes* | OpenAI API key (used for embeddings) |
 | `GEMINI_API_KEY` | No | Google Gemini API key |
+| `DATABASE_URL` | No | Postgres connection string (default: `postgresql://postgres:postgres@localhost:5432/rag_products`; set automatically by Docker Compose) |
 | `ENVIRONMENT` | No | `development` (default) or `production` |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO` (default), `WARNING`, `ERROR` |
 
@@ -166,7 +198,7 @@ docker exec rag-api uv run python scripts/seed.py
 docker exec rag-api uv run python scripts/ingest.py
 ```
 
-After ingestion, vectors are stored in the mounted `data/` volume and persist across restarts.
+After ingestion, vectors are stored in Postgres (the `pgdata` volume) and persist across restarts.
 
 ---
 

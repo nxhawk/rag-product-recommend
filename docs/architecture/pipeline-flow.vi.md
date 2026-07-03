@@ -92,7 +92,7 @@ Hai việc diễn ra song song:
 1. **FilterEngine** trích xuất metadata filter từ truy vấn (thương hiệu, danh mục, khoảng giá, rating tối thiểu) bằng regex pattern trên văn bản tiếng Việt.
 2. **ProductEmbedder** chuyển truy vấn thành vector bằng model `text-embedding-3-small` của OpenAI.
 
-`ProductRetriever` sau đó truy vấn ChromaDB với cả vector lẫn metadata filter, lấy về `top_k × 3` ứng viên (lấy dư để bước chấm điểm thu hẹp lại).
+`ProductRetriever` sau đó truy vấn Postgres (pgvector) với cả vector lẫn metadata filter, lấy về `top_k × 3` ứng viên (lấy dư để bước chấm điểm thu hẹp lại).
 
 **Nguồn:** `src/retrieval/product_retriever.py`, `src/retrieval/filter_engine.py`
 
@@ -183,7 +183,7 @@ Bảng so sánh và mô tả sản phẩm được chèn vào prompt template. L
 
 `HybridSearch` kết hợp nhiều chiến lược truy xuất:
 
-- **Semantic search** — độ tương đồng vector qua ChromaDB (hiện đang hoạt động)
+- **Semantic search** — độ tương đồng vector qua Postgres + pgvector (hiện đang hoạt động)
 - **Keyword search** — BM25 cho khớp từ khóa chính xác (dự kiến triển khai)
 - **Metadata filter** — ràng buộc giá, thương hiệu, danh mục
 
@@ -255,7 +255,7 @@ flowchart TD
         RAW["Dữ liệu sản phẩm thô\n(JSON/CSV)"] --> CLEAN[DataCleaner]
         CLEAN --> CHUNK[Chunker]
         CHUNK --> EMBED[ProductEmbedder]
-        EMBED --> STORE["ChromaDB\n(vector + metadata)"]
+        EMBED --> STORE["Postgres + pgvector\n(vector + metadata)"]
     end
 
     subgraph Runtime["Xử lý truy vấn (online)"]

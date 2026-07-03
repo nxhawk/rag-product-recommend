@@ -12,9 +12,10 @@ llm_temperature: 0.3
 embedding_provider: "openai"
 embedding_model: "text-embedding-3-small"
 
-# Vector Database
-vector_db: "chroma"
-vector_db_path: "./data/embeddings"
+# Vector Database (Postgres + pgvector)
+vector_db: "pgvector"
+vector_db_url: "postgresql://postgres:postgres@localhost:5432/rag_products"  # overridden by DATABASE_URL env var
+embedding_dim: 1536
 
 # Retrieval
 top_k_retrieve: 20

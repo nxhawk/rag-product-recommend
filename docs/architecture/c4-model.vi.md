@@ -61,7 +61,7 @@ flowchart TB
         API["Web API\n[FastAPI, Python]\nRoutes, guardrails, RAG router,\npipeline recommend/compare"]
         Crawler["Crawler\n[CLI, scripts/crawl.py]\nThu thập dữ liệu sản phẩm thô\n(offline, batch)"]
         Ingest["Ingestion CLI\n[scripts/ingest.py]\nClean → chunk → embed → store\n(offline, batch)"]
-        VDB[("Vector Store\n[ChromaDB, nhúng]\ndata/embeddings/\nvector + metadata")]
+        VDB[("Vector Store\n[Postgres + pgvector]\nvector + metadata")]
         Redis[("Cache\n[Redis]\ncache embedding /\ncache phản hồi LLM")]
         Files[("Lưu trữ file\ndata/raw, data/processed\nJSON/CSV")]
     end
@@ -97,7 +97,7 @@ flowchart TB
 | Web API | FastAPI (Python 3.11+), chạy bằng uvicorn | Phục vụ `/api/recommend`, `/api/compare`, `/api/search`; chứa RAG router và cả hai pipeline trong cùng tiến trình | Service `app` trong `docker-compose.yml`, cổng 8000 |
 | Crawler | CLI Python (`scripts/crawl.py`) | Thu thập thông số + đánh giá thô từ các trang TMĐT vào `data/raw/crawled/` | Chạy thủ công/định kỳ, dùng chung image với API |
 | Ingestion CLI | CLI Python (`scripts/ingest.py`) | Đọc dữ liệu thô, làm sạch, chia chunk, embed, và upsert vào vector store | Chạy thủ công/định kỳ, dùng chung image với API |
-| Vector Store | ChromaDB (`PersistentClient`) | Tìm kiếm tương đồng cosine trên embedding sản phẩm + metadata | **Nhúng** trong tiến trình API — lưu tại `data/embeddings/`, hiện chưa phải service mạng riêng (Qdrant có thể thay thế cho triển khai dạng networked) |
+| Vector Store | Postgres 16 + pgvector | Tìm kiếm tương đồng cosine (chỉ mục HNSW) trên embedding sản phẩm + metadata dạng JSONB | Service `postgres` trong `docker-compose.yml`, cổng 5432 — persist qua volume `pgdata`; kết nối qua `DATABASE_URL` |
 | Cache | Redis 7 | Dự kiến cache cho embedding và phản hồi LLM (`src/utils/cache.py`) | Service `redis` trong `docker-compose.yml`, cổng 6379. **Lưu ý:** `SimpleCache` hiện chỉ triển khai lưu trữ dạng dict trong bộ nhớ bất kể backend cấu hình — phần kết nối Redis đã được chuẩn bị nhưng chưa được sử dụng |
 | Lưu trữ file | Hệ thống file cục bộ | JSON crawl thô, dữ liệu đã xử lý/làm sạch, dữ liệu sản phẩm mẫu | Volume mount (`../data:/app/data`) |
 

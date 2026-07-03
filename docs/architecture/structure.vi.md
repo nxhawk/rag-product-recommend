@@ -99,13 +99,13 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 ### `src/embedding/` — Embedding & Vector DB
 
-**Mục đích:** Chuyển văn bản thành vector và quản lý vector database (ChromaDB / Qdrant).
+**Mục đích:** Chuyển văn bản thành vector và quản lý vector database (Postgres + pgvector).
 
 | File | Mục đích | Khi nào thêm/cập nhật |
 | ---- | ------- | ------------------- |
 | `product_embedder.py` | Embed văn bản thành vector bằng `text-embedding-3-small` của OpenAI | Khi đổi embedding model hoặc thêm provider embedding mới |
 | `multi_field_embedder.py` | Sinh embedding riêng cho từng trường sản phẩm (tên, mô tả, thông số) | Khi đổi trường nào có embedding riêng hoặc điều chỉnh trọng số trường |
-| `vector_store.py` | Thao tác CRUD cho ChromaDB/Qdrant — tạo collection, upsert, query, xóa | Khi đổi vector DB provider, thêm pattern query mới, hoặc đổi metric similarity |
+| `vector_store.py` | Thao tác CRUD cho Postgres + pgvector — tạo bảng/chỉ mục, upsert, query, xóa | Khi đổi vector DB provider, thêm pattern query mới, hoặc đổi metric similarity |
 
 **Khi nào thêm file mới:** Khi thêm một chiến lược embedding mới (vd: `sparse_embedder.py` cho vector BM25) hoặc một backend vector DB mới.
 
@@ -252,7 +252,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 | File | Mục đích | Khi nào thêm/cập nhật |
 | ---- | ------- | ------------------- |
 | `crawl.py` | Crawl dữ liệu sản phẩm thô vào `data/raw/crawled/` (`--source`, `--category`, `--all`) | Khi đổi option CLI của crawl hoặc thêm nguồn mới |
-| `ingest.py` | Pipeline nạp dữ liệu đầy đủ: load → clean → chunk → embed → lưu vào ChromaDB | Khi đổi luồng ingestion hoặc thêm nguồn dữ liệu mới |
+| `ingest.py` | Pipeline nạp dữ liệu đầy đủ: load → clean → chunk → embed → lưu vào Postgres (pgvector) | Khi đổi luồng ingestion hoặc thêm nguồn dữ liệu mới |
 | `seed.py` | Sinh dữ liệu sản phẩm mẫu cho phát triển/testing | Khi thêm danh mục sản phẩm mới hoặc đổi schema dữ liệu mẫu |
 
 **Khi nào thêm file mới:** Khi cần một tác vụ CLI mới (vd: `migrate.py` cho migration vector store, `export.py` cho export dữ liệu).
@@ -310,7 +310,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 | `raw/products/` | Dữ liệu sản phẩm gốc (JSON, CSV) | Tracked | Khi thêm file dữ liệu sản phẩm mới |
 | `raw/crawled/` | Output crawler thô theo từng nguồn (`<timestamp>.json` + `latest.json`) | Gitignored | Tự động sinh bởi `scripts/crawl.py` |
 | `processed/` | Dữ liệu đã làm sạch và chuẩn hóa (output của `data_cleaner.py`) | Gitignored | Tự động sinh bởi pipeline ingestion |
-| `embeddings/` | Thư mục persist của ChromaDB | Gitignored | Tự động sinh bởi `scripts/ingest.py` — không sửa tay |
+| `embeddings/` | Thư mục persist cũ của ChromaDB (không còn dùng — vector giờ nằm trong Postgres) | Gitignored | Có thể xóa an toàn |
 
 ---
 

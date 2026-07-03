@@ -58,7 +58,8 @@ All pipeline settings are centralized in `PipelineConfig` (loaded from `configs/
 llm_provider: "anthropic"
 llm_model: "claude-sonnet-4-6"
 embedding_model: "text-embedding-3-small"
-vector_db: "chroma"
+vector_db: "pgvector"
+vector_db_url: "postgresql://postgres:postgres@localhost:5432/rag_products"
 top_k_retrieve: 20
 top_k_recommend: 5
 ```

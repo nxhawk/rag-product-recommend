@@ -12,7 +12,7 @@ flowchart LR
         B -->|"data/raw/crawled/*.json"| C["cleaned + normalized\nrecords"]
         C -->|"chunk"| D["field-based chunks\n+ metadata"]
         D -->|"embed"| E["float vectors\n(1536-dim)"]
-        E -->|"upsert"| F[("ChromaDB\nvectors + metadata\ndata/embeddings/")]
+        E -->|"upsert"| F[("Postgres + pgvector\nvectors + metadata")]
     end
 
     subgraph Online["Online data lifecycle (per-request)"]
@@ -40,7 +40,7 @@ flowchart LR
 | Parse specs | Free-text specs | Structured key-value spec map | Python dict | — | `src/ingestion/spec_parser.py` |
 | Chunk | Cleaned product | Field-based chunks (description, specs, pros/cons, reviews), each carrying `product_id`, `brand`, `category`, `price` metadata | List of chunk dicts | — | `src/ingestion/chunker.py` |
 | Embed | Chunk text | Dense vector | `list[float]`, 1536-dim (`text-embedding-3-small`) | — | `src/embedding/product_embedder.py` |
-| Store | Vectors + documents + metadata | Indexed collection | ChromaDB collection (cosine similarity) | `data/embeddings/` (gitignored) | `src/embedding/vector_store.py` |
+| Store | Vectors + documents + metadata | Indexed table | Postgres table with pgvector column (HNSW, cosine similarity) | Postgres (`pgdata` volume) | `src/embedding/vector_store.py` |
 
 This whole lifecycle runs via `scripts/crawl.py` then `scripts/ingest.py` — never automatically triggered by an API request.
 
@@ -72,7 +72,7 @@ This whole lifecycle runs via `scripts/crawl.py` then `scripts/ingest.py` — ne
 | `data/raw/products/` | Original sample product data | JSON/CSV | Tracked | Manually curated / `scripts/seed.py` | `src/ingestion/product_loader.py` |
 | `data/raw/crawled/` | Raw crawler output per source | JSON | Gitignored | `scripts/crawl.py` | `scripts/ingest.py` |
 | `data/processed/` | Cleaned, normalized, chunked data | JSON | Gitignored | `src/ingestion/data_cleaner.py`, `chunker.py` | `src/embedding/product_embedder.py` |
-| `data/embeddings/` | ChromaDB persistent collection | Chroma internal (SQLite + Parquet-like segments) | Gitignored | `src/embedding/vector_store.py` | `src/retrieval/product_retriever.py` |
+| Postgres (`postgres` container) | Product vectors + documents + JSONB metadata (`products` table) | pgvector `vector(1536)` column + HNSW index | N/A (external service, `pgdata` volume) | `src/embedding/vector_store.py` | `src/retrieval/product_retriever.py` |
 | Redis (`redis` container) | Cache entries keyed by an MD5 hash of the call arguments (`SimpleCache.make_key`) | Key → serialized value | N/A (external service) | Intended for `src/utils/cache.py` — **currently unused**; `SimpleCache` only keeps an in-memory dict regardless of `backend` | — |
 
 ## Notes on Data Sensitivity

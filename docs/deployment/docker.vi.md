@@ -4,7 +4,7 @@ Hướng dẫn này bao gồm hai cách chạy dự án với Docker: build cụ
 
 ## Cách 1 — Docker Compose (Build cục bộ)
 
-Phù hợp nhất cho phát triển cục bộ. Build image từ source và khởi động API server cùng Redis.
+Phù hợp nhất cho phát triển cục bộ. Build image từ source và khởi động API server cùng Postgres (pgvector) và Redis.
 
 ### Yêu cầu
 
@@ -23,11 +23,12 @@ cd docker
 docker compose up --build
 ```
 
-Lệnh này khởi động hai container:
+Lệnh này khởi động ba container:
 
 | Service | Port | Mô tả |
 | ------- | ---- | ----------- |
 | **app** | `8000` | FastAPI server |
+| **postgres** | `5432` | Postgres + pgvector (vector store) |
 | **redis** | `6379` | Redis cache |
 
 API có sẵn tại `http://localhost:8000`. Tài liệu tương tác tại `http://localhost:8000/docs`.
@@ -51,14 +52,21 @@ Docker layer caching có nghĩa là chỉ layer thay đổi mới được rebui
 
 ### Lưu trữ dữ liệu bền vững
 
-Thư mục `data/` được mount như một volume, nên vector của ChromaDB vẫn được giữ lại qua các lần restart container:
+Vector được lưu trong Postgres, persist qua named volume `pgdata`. Thư mục `data/` vẫn được mount cho dữ liệu sản phẩm thô:
 
 ```yaml
 volumes:
-  - ../data:/app/data
+  - ../data:/app/data   # dữ liệu thô (service app)
+  - pgdata:/var/lib/postgresql/data   # vector (service postgres)
 ```
 
-Nếu cần một vector store sạch, xóa `data/embeddings/` trên host và chạy lại ingestion.
+Nếu cần một vector store sạch, xóa volume và chạy lại ingestion:
+
+```bash
+docker compose down -v   # xóa pgdata
+docker compose up -d
+docker compose exec app uv run python scripts/ingest.py
+```
 
 ---
 
@@ -117,10 +125,30 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rag_products
     volumes:
       - ./data:/app/data
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rag_products
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rag_products"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   redis:
@@ -128,6 +156,9 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+
+volumes:
+  pgdata:
 ```
 
 ```bash
@@ -145,6 +176,7 @@ Các biến này cần được thiết lập qua `--env-file`, cờ `-e`, hoặ
 | `ANTHROPIC_API_KEY` | Có* | API key của Anthropic Claude |
 | `OPENAI_API_KEY` | Có* | API key của OpenAI (dùng cho embedding) |
 | `GEMINI_API_KEY` | Không | API key của Google Gemini |
+| `DATABASE_URL` | Không | Chuỗi kết nối Postgres (mặc định: `postgresql://postgres:postgres@localhost:5432/rag_products`; Docker Compose tự thiết lập) |
 | `ENVIRONMENT` | Không | `development` (mặc định) hoặc `production` |
 | `LOG_LEVEL` | Không | `DEBUG`, `INFO` (mặc định), `WARNING`, `ERROR` |
 
@@ -166,7 +198,7 @@ docker exec rag-api uv run python scripts/seed.py
 docker exec rag-api uv run python scripts/ingest.py
 ```
 
-Sau khi ingest, vector được lưu trong volume `data/` đã mount và vẫn tồn tại qua các lần restart.
+Sau khi ingest, vector được lưu trong Postgres (volume `pgdata`) và vẫn tồn tại qua các lần restart.
 
 ---
 

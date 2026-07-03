@@ -34,8 +34,12 @@ def get_embedder(config: PipelineConfig | None = None) -> ProductEmbedder:
 def get_vector_store(config: PipelineConfig | None = None) -> VectorStore:
     """Create and setup vector store."""
     cfg = config or get_config()
-    store = VectorStore(provider=cfg.vector_db, collection_name=cfg.collection_name)
-    store.setup(persist_dir=cfg.vector_db_path)
+    store = VectorStore(
+        provider=cfg.vector_db,
+        collection_name=cfg.collection_name,
+        embedding_dim=cfg.embedding_dim,
+    )
+    store.setup(dsn=cfg.vector_db_url)
     return store
 
 

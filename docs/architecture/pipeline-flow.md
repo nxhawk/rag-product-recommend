@@ -92,7 +92,7 @@ Two things happen in parallel:
 1. **FilterEngine** extracts metadata filters from the query (brand, category, price range, minimum rating) using regex patterns on Vietnamese text.
 2. **ProductEmbedder** converts the query into a vector using OpenAI `text-embedding-3-small`.
 
-The `ProductRetriever` then queries ChromaDB with both the vector and metadata filters, retrieving `top_k × 3` candidates (over-fetching for the scoring step to narrow down).
+The `ProductRetriever` then queries Postgres (pgvector) with both the vector and metadata filters, retrieving `top_k × 3` candidates (over-fetching for the scoring step to narrow down).
 
 **Source:** `src/retrieval/product_retriever.py`, `src/retrieval/filter_engine.py`
 
@@ -183,7 +183,7 @@ The comparison table and product descriptions are injected into a prompt templat
 
 `HybridSearch` combines multiple retrieval strategies:
 
-- **Semantic search** — vector similarity via ChromaDB (currently active)
+- **Semantic search** — vector similarity via Postgres + pgvector (currently active)
 - **Keyword search** — BM25 for exact term matches (planned)
 - **Metadata filter** — price, brand, category constraints
 
@@ -255,7 +255,7 @@ flowchart TD
         RAW["Raw product data\n(JSON/CSV)"] --> CLEAN[DataCleaner]
         CLEAN --> CHUNK[Chunker]
         CHUNK --> EMBED[ProductEmbedder]
-        EMBED --> STORE["ChromaDB\n(vectors + metadata)"]
+        EMBED --> STORE["Postgres + pgvector\n(vectors + metadata)"]
     end
 
     subgraph Runtime["Query Processing (online)"]

@@ -16,7 +16,7 @@ flowchart TD
         CLEAN --> SPEC[SpecParser]
         SPEC --> CHUNK["Chunker\n(field-based chunks)"]
         CHUNK --> EMBED[ProductEmbedder]
-        EMBED --> VDB[("ChromaDB\nvectors + metadata")]
+        EMBED --> VDB[("Postgres + pgvector\nvectors + metadata")]
     end
 
     subgraph Online["Query Processing (online, per-request)"]
@@ -57,7 +57,7 @@ sequenceDiagram
     participant Guard as Guardrails
     participant Router as RAGRouter
     participant Pipe as Recommend/Compare Pipeline
-    participant VDB as ChromaDB
+    participant VDB as Postgres (pgvector)
     participant LLM as LLM Client
 
     User->>API: POST /api/recommend or /api/compare
@@ -101,7 +101,7 @@ Loads raw product data (JSON, CSV), cleans and normalizes it, then splits each p
 
 ### 2. Embedding (`src/embedding/`)
 
-Converts text chunks into vector embeddings using OpenAI's `text-embedding-3-small` model. Stores vectors in ChromaDB with cosine similarity indexing. Supports multi-field embedding for richer retrieval.
+Converts text chunks into vector embeddings using OpenAI's `text-embedding-3-small` model. Stores vectors in Postgres (pgvector) with an HNSW cosine-similarity index. Supports multi-field embedding for richer retrieval.
 
 ### 3. Retrieval (`src/retrieval/`)
 

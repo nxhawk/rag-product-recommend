@@ -19,9 +19,10 @@ class PipelineConfig:
     embedding_provider: str = "openai"
     embedding_model: str = "text-embedding-3-small"
 
-    # Vector Store
-    vector_db: str = "chroma"
-    vector_db_path: str = "./data/embeddings"
+    # Vector Store (Postgres + pgvector)
+    vector_db: str = "pgvector"
+    vector_db_url: str = "postgresql://postgres:postgres@localhost:5432/rag_products"
+    embedding_dim: int = 1536
     collection_name: str = "products"
 
     # Retrieval

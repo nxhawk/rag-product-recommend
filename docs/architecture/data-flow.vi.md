@@ -12,7 +12,7 @@ flowchart LR
         B -->|"data/raw/crawled/*.json"| C["bản ghi đã làm sạch\n+ chuẩn hóa"]
         C -->|"chunk"| D["chunk theo trường\n+ metadata"]
         D -->|"embed"| E["vector số thực\n(1536 chiều)"]
-        E -->|"upsert"| F[("ChromaDB\nvector + metadata\ndata/embeddings/")]
+        E -->|"upsert"| F[("Postgres + pgvector\nvector + metadata")]
     end
 
     subgraph Online["Vòng đời dữ liệu online (theo request)"]
@@ -40,7 +40,7 @@ flowchart LR
 | Parse specs | Thông số dạng văn bản tự do | Map key-value có cấu trúc | Python dict | — | `src/ingestion/spec_parser.py` |
 | Chunk | Sản phẩm đã làm sạch | Chunk theo trường (mô tả, thông số, ưu/nhược điểm, đánh giá), mỗi chunk kèm metadata `product_id`, `brand`, `category`, `price` | Danh sách dict chunk | — | `src/ingestion/chunker.py` |
 | Embed | Văn bản chunk | Vector dày đặc | `list[float]`, 1536 chiều (`text-embedding-3-small`) | — | `src/embedding/product_embedder.py` |
-| Store | Vector + document + metadata | Collection đã đánh index | Collection ChromaDB (cosine similarity) | `data/embeddings/` (gitignored) | `src/embedding/vector_store.py` |
+| Store | Vector + document + metadata | Bảng đã đánh index | Bảng Postgres với cột pgvector (HNSW, cosine similarity) | Postgres (volume `pgdata`) | `src/embedding/vector_store.py` |
 
 Toàn bộ vòng đời này chạy qua `scripts/crawl.py` rồi `scripts/ingest.py` — không bao giờ tự động kích hoạt bởi một request API.
 
@@ -72,7 +72,7 @@ Toàn bộ vòng đời này chạy qua `scripts/crawl.py` rồi `scripts/ingest
 | `data/raw/products/` | Dữ liệu sản phẩm mẫu gốc | JSON/CSV | Tracked | Biên soạn thủ công / `scripts/seed.py` | `src/ingestion/product_loader.py` |
 | `data/raw/crawled/` | Dữ liệu thô từ crawler theo từng nguồn | JSON | Gitignored | `scripts/crawl.py` | `scripts/ingest.py` |
 | `data/processed/` | Dữ liệu đã làm sạch, chuẩn hóa, chia chunk | JSON | Gitignored | `src/ingestion/data_cleaner.py`, `chunker.py` | `src/embedding/product_embedder.py` |
-| `data/embeddings/` | Collection ChromaDB dạng persistent | Định dạng nội bộ Chroma (SQLite + các segment kiểu Parquet) | Gitignored | `src/embedding/vector_store.py` | `src/retrieval/product_retriever.py` |
+| Postgres (container `postgres`) | Vector sản phẩm + document + metadata JSONB (bảng `products`) | Cột pgvector `vector(1536)` + chỉ mục HNSW | N/A (dịch vụ ngoài, volume `pgdata`) | `src/embedding/vector_store.py` | `src/retrieval/product_retriever.py` |
 | Redis (container `redis`) | Entry cache, khóa bằng hash MD5 của tham số gọi (`SimpleCache.make_key`) | Key → giá trị đã serialize | N/A (dịch vụ ngoài) | Dự kiến cho `src/utils/cache.py` — **hiện chưa được dùng**; `SimpleCache` chỉ giữ dict trong bộ nhớ bất kể `backend` | — |
 
 ## Lưu ý về độ nhạy cảm dữ liệu

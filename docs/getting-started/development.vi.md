@@ -72,9 +72,10 @@ llm_model: "claude-sonnet-4-6"
 embedding_provider: "openai"
 embedding_model: "text-embedding-3-small"
 
-# Vector DB
-vector_db: "chroma"
-vector_db_path: "./data/embeddings"
+# Vector DB (Postgres + pgvector)
+vector_db: "pgvector"
+vector_db_url: "postgresql://postgres:postgres@localhost:5432/rag_products"  # override bằng DATABASE_URL
+embedding_dim: 1536
 
 # Retrieval
 top_k_retrieve: 20
@@ -86,13 +87,16 @@ Cấu hình được nạp thành dataclass `PipelineConfig` qua `PipelineConfig
 
 ## Nạp dữ liệu (Data Ingestion)
 
-Trước khi chạy server, cần nạp dữ liệu sản phẩm vào vector store:
+Trước khi chạy server, khởi động Postgres rồi nạp dữ liệu sản phẩm vào vector store:
 
 ```bash
+# Khởi động Postgres với pgvector (Docker)
+cd docker && docker compose up -d postgres && cd ..
+
 # Sinh dữ liệu mẫu (tạo các file JSON trong data/raw/products/)
 uv run python scripts/seed.py
 
-# Nạp vào ChromaDB
+# Nạp vào Postgres (pgvector)
 uv run python scripts/ingest.py
 ```
 
@@ -102,7 +106,7 @@ Các bước này sẽ:
 2. Làm sạch và chuẩn hóa dữ liệu
 3. Chia nhỏ các trường sản phẩm (chunk)
 4. Sinh embedding qua OpenAI
-5. Lưu vector vào ChromaDB tại `data/embeddings/`
+5. Lưu vector vào bảng `products` trong Postgres (pgvector, chỉ mục HNSW cosine)
 
 ## Chạy API Server
 

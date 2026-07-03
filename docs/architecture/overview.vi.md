@@ -16,7 +16,7 @@ flowchart TD
         CLEAN --> SPEC[SpecParser]
         SPEC --> CHUNK["Chunker\n(chia theo từng trường)"]
         CHUNK --> EMBED[ProductEmbedder]
-        EMBED --> VDB[("ChromaDB\nvector + metadata")]
+        EMBED --> VDB[("Postgres + pgvector\nvector + metadata")]
     end
 
     subgraph Online["Xử lý truy vấn (online, theo từng request)"]
@@ -57,7 +57,7 @@ sequenceDiagram
     participant Guard as Guardrails
     participant Router as RAGRouter
     participant Pipe as Recommend/Compare Pipeline
-    participant VDB as ChromaDB
+    participant VDB as Postgres (pgvector)
     participant LLM as LLM Client
 
     User->>API: POST /api/recommend hoặc /api/compare
@@ -101,7 +101,7 @@ Nạp dữ liệu sản phẩm thô (JSON, CSV), làm sạch và chuẩn hóa, s
 
 ### 2. Embedding (`src/embedding/`)
 
-Chuyển các đoạn văn bản thành vector embedding bằng model `text-embedding-3-small` của OpenAI. Lưu vector vào ChromaDB với chỉ mục cosine similarity. Hỗ trợ embedding đa trường (multi-field) để truy xuất phong phú hơn.
+Chuyển các đoạn văn bản thành vector embedding bằng model `text-embedding-3-small` của OpenAI. Lưu vector vào Postgres (pgvector) với chỉ mục HNSW cosine similarity. Hỗ trợ embedding đa trường (multi-field) để truy xuất phong phú hơn.
 
 ### 3. Retrieval (`src/retrieval/`)
 

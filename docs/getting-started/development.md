@@ -72,9 +72,10 @@ llm_model: "claude-sonnet-4-6"
 embedding_provider: "openai"
 embedding_model: "text-embedding-3-small"
 
-# Vector DB
-vector_db: "chroma"
-vector_db_path: "./data/embeddings"
+# Vector DB (Postgres + pgvector)
+vector_db: "pgvector"
+vector_db_url: "postgresql://postgres:postgres@localhost:5432/rag_products"  # overridden by DATABASE_URL
+embedding_dim: 1536
 
 # Retrieval
 top_k_retrieve: 20
@@ -86,13 +87,16 @@ The config is loaded as a `PipelineConfig` dataclass via `PipelineConfig.from_ya
 
 ## Data Ingestion
 
-Before running the server, ingest product data into the vector store:
+Before running the server, start Postgres and ingest product data into the vector store:
 
 ```bash
+# Start Postgres with pgvector (Docker)
+cd docker && docker compose up -d postgres && cd ..
+
 # Seed sample data (creates JSON files in data/raw/products/)
 uv run python scripts/seed.py
 
-# Ingest into ChromaDB
+# Ingest into Postgres (pgvector)
 uv run python scripts/ingest.py
 ```
 
@@ -102,7 +106,7 @@ This will:
 2. Clean and normalize the data
 3. Chunk product fields
 4. Generate embeddings via OpenAI
-5. Store vectors in ChromaDB at `data/embeddings/`
+5. Store vectors in the `products` table in Postgres (pgvector, HNSW cosine index)
 
 ## Running the API Server
 

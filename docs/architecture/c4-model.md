@@ -61,7 +61,7 @@ flowchart TB
         API["Web API\n[FastAPI, Python]\nRoutes, guardrails, RAG router,\nrecommend/compare pipelines"]
         Crawler["Crawler\n[CLI, scripts/crawl.py]\nCollects raw product data\n(offline, batch)"]
         Ingest["Ingestion CLI\n[scripts/ingest.py]\nClean → chunk → embed → store\n(offline, batch)"]
-        VDB[("Vector Store\n[ChromaDB, embedded]\ndata/embeddings/\nvectors + metadata")]
+        VDB[("Vector Store\n[Postgres + pgvector]\nvectors + metadata")]
         Redis[("Cache\n[Redis]\nembedding / LLM\nresponse cache")]
         Files[("File Storage\ndata/raw, data/processed\nJSON/CSV")]
     end
@@ -97,7 +97,7 @@ flowchart TB
 | Web API | FastAPI (Python 3.11+), served by uvicorn | Serves `/api/recommend`, `/api/compare`, `/api/search`; hosts the RAG router and both pipelines in-process | `app` service in `docker-compose.yml`, port 8000 |
 | Crawler | Python CLI (`scripts/crawl.py`) | Collects raw specs + reviews from e-commerce sites into `data/raw/crawled/` | Run ad hoc / scheduled, same image as the API |
 | Ingestion CLI | Python CLI (`scripts/ingest.py`) | Loads raw data, cleans, chunks, embeds, and upserts into the vector store | Run ad hoc / scheduled, same image as the API |
-| Vector Store | ChromaDB (`PersistentClient`) | Cosine-similarity search over product embeddings + metadata | **Embedded** in the API process — persisted to `data/embeddings/`, not a separate network service today (Qdrant is supported as a swap-in for a networked deployment) |
+| Vector Store | Postgres 16 + pgvector | Cosine-similarity search (HNSW index) over product embeddings + JSONB metadata | `postgres` service in `docker-compose.yml`, port 5432 — persisted in the `pgdata` volume; connection via `DATABASE_URL` |
 | Cache | Redis 7 | Intended cache for embeddings and LLM responses (`src/utils/cache.py`) | `redis` service in `docker-compose.yml`, port 6379. **Note:** `SimpleCache` currently only implements an in-memory dict regardless of the configured backend — the Redis wiring is provisioned but not yet consumed |
 | File Storage | Local filesystem | Raw crawled JSON, processed/cleaned data, sample product data | Mounted volume (`../data:/app/data`) |
 

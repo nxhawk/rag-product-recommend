@@ -27,8 +27,11 @@ def main():
     import os
     embedder.setup(api_key=os.getenv("OPENAI_API_KEY", ""))
 
-    store = VectorStore(collection_name=config.collection_name)
-    store.setup(persist_dir=config.vector_db_path)
+    store = VectorStore(
+        collection_name=config.collection_name,
+        embedding_dim=config.embedding_dim,
+    )
+    store.setup(dsn=config.vector_db_url)
 
     logger.info("Loading products...")
     raw_products = loader.load_all()

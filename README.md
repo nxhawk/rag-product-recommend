@@ -20,7 +20,7 @@ A product recommendation and comparison system powered by **RAG (Retrieval-Augme
 | API          | FastAPI + uvicorn                                     |
 | LLM          | Anthropic Claude / OpenAI GPT / Google Gemini         |
 | Embedding    | OpenAI `text-embedding-3-small`                       |
-| Vector DB    | ChromaDB (embedded) → Qdrant (swap-in for production) |
+| Vector DB    | PostgreSQL + [pgvector](https://github.com/pgvector/pgvector) (HNSW, cosine) |
 | Crawling     | httpx + BeautifulSoup + lxml (tenacity for retries)   |
 | Cache        | Redis (provisioned in Docker Compose)                 |
 | Container    | Docker + Docker Compose                               |
@@ -93,7 +93,7 @@ rag-product-recommend/
 ├── src/                 # Core business logic
 │   ├── crawler/         #   Web crawling → data/raw/crawled/ (spiders/ per source)
 │   ├── ingestion/       #   Load, clean, parse specs, chunk raw product data
-│   ├── embedding/       #   Text → vector (OpenAI) + vector store CRUD (ChromaDB/Qdrant)
+│   ├── embedding/       #   Text → vector (OpenAI) + vector store CRUD (Postgres/pgvector)
 │   ├── retrieval/       #   Hybrid search, filter extraction, scoring, reranking
 │   ├── generation/      #   Multi-provider LLM client, prompt templates, guardrails
 │   ├── pipeline/        #   Orchestration: RAG router + recommend/compare pipelines
@@ -112,13 +112,12 @@ rag-product-recommend/
 │
 ├── configs/             # settings.yaml, crawler.yaml, product_categories.yaml, scoring_weights.yaml
 ├── docs/                # MkDocs Material documentation (EN + VI)
-├── docker/              # Dockerfile, docker-compose.yml (app + redis)
+├── docker/              # Dockerfile, docker-compose.yml (app + postgres + redis)
 │
 └── data/
     ├── raw/products/    # Curated sample data (tracked)
     ├── raw/crawled/     # Raw crawler output (gitignored)
-    ├── processed/       # Cleaned/chunked data (gitignored)
-    └── embeddings/      # ChromaDB persist directory (gitignored)
+    └── processed/       # Cleaned/chunked data (gitignored)
 ```
 
 ## RAG Pipeline Flow
