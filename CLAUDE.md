@@ -5,7 +5,7 @@
 - **Code comments**: English only.
 - **Docstrings**: English only.
 - **Variable/function/class names**: English only.
-- **Documentation files** (`docs/**/*.md`, `README.md`, `CLAUDE.md`): English only.
+- **Documentation files**: `README.md` and `CLAUDE.md`: English only. `docs/**/*.md` (MkDocs site): bilingual via `mkdocs-static-i18n` — English is the default/source language (no suffix, e.g. `index.md`); Vietnamese translations use the `.vi.md` suffix (e.g. `index.vi.md`). Every English page should eventually get a matching `.vi.md` counterpart; pages without one fall back to English automatically (`fallback_to_default: true` in `mkdocs.yml`).
 - **Git commit messages**: English only.
 - **User-facing text** (LLM prompts, API responses shown to end users): Vietnamese.
 
@@ -14,7 +14,7 @@
 - Use Python 3.11+ features (type unions with `|`, `match` statements, etc.).
 - Use type hints on all function signatures.
 - Use `uv` for package management (not pip). Add deps via `uv add <package>`.
-- Documentation site: MkDocs Material (`docs/` folder, config in `mkdocs.yml`).
+- Documentation site: MkDocs Material (`docs/` folder, config in `mkdocs.yml`), i18n via `mkdocs-static-i18n` (EN default, VI suffix `.vi.md`).
 
 ## Project Overview
 

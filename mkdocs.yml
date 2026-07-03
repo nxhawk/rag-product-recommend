@@ -21,7 +21,8 @@ theme:
         icon: material/brightness-4
         name: Light mode
   features:
-    - navigation.instant
+    # navigation.instant is intentionally omitted: it's incompatible with the
+    # mkdocs-static-i18n language switcher's contextual links (would fail `mkdocs build --strict`).
     - navigation.tracking
     - navigation.sections
     - navigation.expand
@@ -54,6 +55,37 @@ markdown_extensions:
 plugins:
   - search
   - awesome-pages
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      languages:
+        - locale: en
+          name: English
+          build: true
+          default: true
+        - locale: vi
+          name: Tiếng Việt
+          build: true
+          nav_translations:
+            Home: Trang chủ
+            Getting Started: Bắt đầu
+            Installation: Cài đặt
+            Quick Start: Bắt đầu nhanh
+            Development Guide: Hướng dẫn phát triển
+            Architecture: Kiến trúc
+            Overview: Tổng quan
+            Pipeline: Pipeline
+            Pipeline Flow: Luồng xử lý
+            Project Structure: Cấu trúc dự án
+            API Reference: Tài liệu API
+            Endpoints: Endpoints
+            Schemas: Schemas
+            Deployment: Triển khai
+            Docker: Docker
+            Development: Phát triển
+            Contributing: Đóng góp
+            Crawler: Crawler
+            Testing: Kiểm thử
 
 nav:
   - Home: index.md
