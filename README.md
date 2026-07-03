@@ -6,23 +6,26 @@ A product recommendation and comparison system powered by **RAG (Retrieval-Augme
 
 - **Product Recommendation** — Analyzes user intent (budget, purpose, priorities) → retrieves matching products → scores and ranks → LLM explains why each product fits.
 - **Product Comparison** — Aligns specifications across products → compares each criterion → LLM produces detailed analysis with pros/cons and conclusions.
-- **Smart Search** — Hybrid search (semantic + keyword + metadata filter) with cross-encoder reranking.
+- **Smart Search** — Hybrid search (semantic + keyword + metadata filter) with optional cross-encoder reranking.
+- **Web Crawling** — Collects live specs and reviews from e-commerce sites (thegioididong.com, cellphones.com.vn) to seed the vector store.
 - **Vietnamese NLP** — Full support for Vietnamese queries and responses.
+- **Multi-provider LLM** — Anthropic Claude, OpenAI GPT, or Google Gemini, selectable via config.
 
 ## Tech Stack
 
-| Component    | Choice                                      |
-| ------------ | ------------------------------------------- |
-| Language     | Python 3.11+                                |
-| Package Mgr  | [uv](https://docs.astral.sh/uv/)          |
-| API          | FastAPI                                     |
-| LLM          | Claude API / OpenAI GPT                     |
-| Embedding    | text-embedding-3-small                      |
-| Vector DB    | ChromaDB (dev) → Qdrant (prod)              |
-| Cache        | Redis                                       |
-| Container    | Docker + Docker Compose                     |
-| Testing      | pytest                                      |
-| Docs         | MkDocs Material                             |
+| Component    | Choice                                              |
+| ------------ | ---------------------------------------------------- |
+| Language     | Python 3.11+                                          |
+| Package Mgr  | [uv](https://docs.astral.sh/uv/)                      |
+| API          | FastAPI + uvicorn                                     |
+| LLM          | Anthropic Claude / OpenAI GPT / Google Gemini         |
+| Embedding    | OpenAI `text-embedding-3-small`                       |
+| Vector DB    | ChromaDB (embedded) → Qdrant (swap-in for production) |
+| Crawling     | httpx + BeautifulSoup + lxml (tenacity for retries)   |
+| Cache        | Redis (provisioned in Docker Compose)                 |
+| Container    | Docker + Docker Compose                               |
+| Testing      | pytest                                                |
+| Docs         | MkDocs Material (bilingual EN/VI)                     |
 
 ## Quick Start
 
@@ -39,27 +42,34 @@ cd rag-product-recommend
 uv sync
 
 # 3. Configure API keys
-cp .env.example .env
-# Edit .env: ANTHROPIC_API_KEY, OPENAI_API_KEY
+# Create a .env file at the project root with:
+#   ANTHROPIC_API_KEY=...
+#   OPENAI_API_KEY=...
+#   GEMINI_API_KEY=...
+#   ENVIRONMENT=development
+#   LOG_LEVEL=INFO
 
-# 4. Ingest sample data
+# 4. (Optional) Crawl fresh product data
+uv run python scripts/crawl.py --all
+
+# 5. Ingest product data into the vector store
 uv run python scripts/ingest.py
 
-# 5. Start API server
+# 6. Start API server
 uv run uvicorn api.app:app --reload
 
-# 6. Run tests
+# 7. Run tests
 uv run pytest tests/
 ```
 
 ## API Endpoints
 
-| Method | Endpoint         | Description          |
-| ------ | ---------------- | -------------------- |
-| POST   | `/api/recommend` | Product recommendation |
-| POST   | `/api/compare`   | Product comparison     |
-| POST   | `/api/search`    | Product search         |
-| GET    | `/health`        | Health check           |
+| Method | Endpoint         | Description             |
+| ------ | ---------------- | ------------------------ |
+| POST   | `/api/recommend` | Product recommendation   |
+| POST   | `/api/compare`   | Product comparison       |
+| POST   | `/api/search`    | Product search            |
+| GET    | `/health`        | Health check               |
 
 **Example request:**
 
@@ -69,106 +79,46 @@ curl -X POST http://localhost:8000/api/recommend \
   -d '{"query": "Phone with great camera under 15 million VND", "top_k": 3}'
 ```
 
+> **Status:** the route handlers in `api/routes/` are scaffolded with their final request/response schemas (`api/schemas.py`); wiring them to the pipeline factories in `api/deps.py` is in progress — see [PLAN.md](./PLAN.md) for the current phase.
+
 ## Project Structure
 
 ```
 rag-product-recommend/
-├── pyproject.toml              # Dependencies & project metadata
-├── uv.lock                     # Lockfile (like package-lock.json)
-├── .env                        # API keys (not committed)
+├── pyproject.toml       # Dependencies & project metadata
+├── uv.lock              # Lockfile
+├── CLAUDE.md            # AI coding rules + exhaustive per-file structure reference
+├── .env                 # API keys (not committed)
 │
-├── src/                        # Core business logic
-│   ├── ingestion/              # Data loading & normalization
-│   │   ├── product_loader.py   #   Load from JSON/CSV
-│   │   ├── review_loader.py    #   Load user reviews
-│   │   ├── data_cleaner.py     #   Clean & normalize data
-│   │   ├── spec_parser.py      #   Parse product specifications
-│   │   ├── chunker.py          #   Field-based chunking
-│   │   └── price_tracker.py    #   Price history tracking
-│   │
-│   ├── embedding/              # Embedding & Vector DB
-│   │   ├── product_embedder.py #   Text → vector (OpenAI)
-│   │   ├── multi_field_embedder.py  # Per-field embedding
-│   │   └── vector_store.py     #   ChromaDB/Qdrant CRUD
-│   │
-│   ├── retrieval/              # Product retrieval
-│   │   ├── product_retriever.py #  Combined filter + search
-│   │   ├── hybrid_search.py    #   Semantic + keyword search
-│   │   ├── filter_engine.py    #   Extract filters from NL query
-│   │   ├── similarity_scorer.py #  Composite scoring
-│   │   └── reranker.py         #   Cross-encoder reranking
-│   │
-│   ├── generation/             # LLM generation
-│   │   ├── llm_client.py       #   Multi-provider LLM client
-│   │   ├── response_parser.py  #   Parse JSON from LLM output
-│   │   ├── guardrails.py       #   Input/output validation
-│   │   └── prompt_templates/   #   Prompts per use case
-│   │       ├── recommend_prompt.py
-│   │       ├── compare_prompt.py
-│   │       └── review_summary_prompt.py
-│   │
-│   ├── pipeline/               # Orchestration
-│   │   ├── rag_router.py       #   Classify query → pipeline
-│   │   ├── config.py           #   Pipeline configuration
-│   │   ├── recommend_pipeline.py #  E2E recommendation flow
-│   │   ├── compare_pipeline.py #   E2E comparison flow
-│   │   ├── recommend/          #   Recommendation logic
-│   │   │   ├── engine.py       #     Recommendation engine
-│   │   │   ├── user_intent_parser.py  # Parse user intent
-│   │   │   ├── scoring.py      #     Multi-criteria scoring
-│   │   │   └── personalization.py #   User history boost
-│   │   └── compare/            #   Comparison logic
-│   │       ├── comparator.py   #     Compare N products
-│   │       ├── spec_aligner.py #     Align specifications
-│   │       ├── formatter.py    #     Format output
-│   │       └── pros_cons_extractor.py
-│   │
-│   └── utils/                  # Utilities
-│       ├── logger.py
-│       ├── cache.py
-│       └── helpers.py
+├── src/                 # Core business logic
+│   ├── crawler/         #   Web crawling → data/raw/crawled/ (spiders/ per source)
+│   ├── ingestion/       #   Load, clean, parse specs, chunk raw product data
+│   ├── embedding/       #   Text → vector (OpenAI) + vector store CRUD (ChromaDB/Qdrant)
+│   ├── retrieval/       #   Hybrid search, filter extraction, scoring, reranking
+│   ├── generation/      #   Multi-provider LLM client, prompt templates, guardrails
+│   ├── pipeline/        #   Orchestration: RAG router + recommend/compare pipelines
+│   └── utils/           #   Logger, cache, helpers
 │
-├── api/                        # API layer (FastAPI)
-│   ├── app.py                  #   FastAPI entry point
-│   ├── schemas.py              #   Request/Response models
-│   ├── deps.py                 #   Dependency injection
-│   ├── routes/
-│   │   ├── recommend.py
-│   │   ├── compare.py
-│   │   └── search.py
-│   └── middleware/
-│       ├── rate_limit.py       #   Rate limiting
-│       └── error_handler.py    #   Error handling
+├── api/                 # FastAPI layer
+│   ├── app.py           #   Entry point
+│   ├── schemas.py       #   Request/response models
+│   ├── deps.py          #   Dependency injection factories
+│   ├── routes/          #   recommend.py, compare.py, search.py
+│   └── middleware/      #   rate_limit.py, error_handler.py
 │
-├── tests/
-│   ├── conftest.py             # Shared fixtures
-│   ├── unit/                   # Unit tests
-│   └── integration/            # Integration tests
+├── tests/               # pytest suite (unit/, integration/)
+├── evaluation/          # RAG quality evaluation scripts + test cases
+├── scripts/             # CLI entry points: crawl.py, ingest.py, seed.py
 │
-├── evaluation/                 # RAG quality evaluation
-│   ├── eval_recommend.py
-│   ├── eval_compare.py
-│   └── test_cases.json
-│
-├── scripts/                    # CLI scripts
-│   ├── ingest.py               #   Ingest data into vector store
-│   └── seed.py                 #   Seed sample data
-│
-├── configs/
-│   ├── settings.yaml           # Main config
-│   ├── product_categories.yaml # Categories + required fields
-│   └── scoring_weights.yaml    # Scoring weights per use case
-│
-├── docs/                       # MkDocs Material documentation
-│
-├── docker/
-│   ├── Dockerfile
-│   └── docker-compose.yml
+├── configs/             # settings.yaml, crawler.yaml, product_categories.yaml, scoring_weights.yaml
+├── docs/                # MkDocs Material documentation (EN + VI)
+├── docker/              # Dockerfile, docker-compose.yml (app + redis)
 │
 └── data/
-    ├── raw/products/           # Raw data
-    ├── processed/              # Normalized data
-    └── embeddings/             # ChromaDB persist (gitignored)
+    ├── raw/products/    # Curated sample data (tracked)
+    ├── raw/crawled/     # Raw crawler output (gitignored)
+    ├── processed/       # Cleaned/chunked data (gitignored)
+    └── embeddings/      # ChromaDB persist directory (gitignored)
 ```
 
 ## RAG Pipeline Flow
@@ -178,7 +128,7 @@ User Query
     │
     ▼
 ┌─────────────┐
-│  RAG Router  │ ── Classify: RECOMMEND / COMPARE / INFO
+│  RAG Router  │ ── Classify: RECOMMEND / COMPARE / INFO / HYBRID
 └─────┬───────┘
       │
       ├── RECOMMEND ──────────────────────────┐
@@ -192,6 +142,8 @@ User Query
                                           JSON Response
 ```
 
+See the [C4 Model](https://nxhawk.github.io/rag-product-recommend/architecture/c4-model/) and [Data Flow](https://nxhawk.github.io/rag-product-recommend/architecture/data-flow/) docs pages for a deeper architectural view.
+
 ## Development
 
 ```bash
@@ -204,7 +156,11 @@ uv add --group dev <package>
 # Run any command inside the venv
 uv run <command>
 
+# Crawl a specific source/category
+uv run python scripts/crawl.py --source tgdd --category smartphone
+
 # Serve docs locally
+uv sync --group docs
 uv run mkdocs serve
 
 # Docker
@@ -214,7 +170,7 @@ docker compose up --build
 
 ## Documentation
 
-Full documentation is available at the [project docs site](https://nxhawk.github.io/rag-product-recommend/) (deployed via GitHub Pages).
+Full documentation (English + Vietnamese) is available at the [project docs site](https://nxhawk.github.io/rag-product-recommend/) (deployed via GitHub Pages, see `.github/workflows/docs.yml`).
 
 To serve locally:
 
