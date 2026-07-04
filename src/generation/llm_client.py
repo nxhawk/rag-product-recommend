@@ -1,34 +1,45 @@
-"""LLM Client - Unified interface for multiple LLM providers."""
+"""LLM Client - Pluggable multi-provider interface for text generation.
+
+The client delegates to a registered *provider* implementation. Supported
+out of the box: Anthropic, OpenAI, Gemini.
+
+Adding a new provider (e.g. a self-hosted or third-party model) is a two-step,
+open/closed change - no edits to ``LLMClient`` are required:
+
+    @register_llm_provider("myprovider")
+    class MyProvider(BaseLLMProvider):
+        api_key_env = "MYPROVIDER_API_KEY"
+
+        def setup(self, api_key: str) -> None:
+            self.client = ...
+
+        def generate(self, prompt, system_prompt="", max_tokens=2048,
+                     temperature=0.3) -> str:
+            return ...
+"""
+import time
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from typing import ClassVar
+
+from src.utils.helpers import as_key_list, is_rate_limit_error, retry_delay_seconds
 
 
-class LLMClient:
-    """Unified LLM client supporting Anthropic, OpenAI, and Gemini."""
+class BaseLLMProvider(ABC):
+    """Common interface every text-generation provider must implement."""
 
-    PROVIDER_API_KEY_ENV = {
-        "anthropic": "ANTHROPIC_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "gemini": "GEMINI_API_KEY",
-    }
+    #: Environment variable that holds this provider's API key.
+    api_key_env: ClassVar[str] = ""
 
-    def __init__(self, provider: str = "anthropic", model: str = "claude-sonnet-4-6"):
-        self.provider = provider
+    def __init__(self, model: str):
         self.model = model
-        self.client = None
+        self.client = None  # Initialized in setup()
 
+    @abstractmethod
     def setup(self, api_key: str) -> None:
-        """Initialize the LLM client for the configured provider."""
-        if self.provider == "anthropic":
-            from anthropic import Anthropic
-            self.client = Anthropic(api_key=api_key)
-        elif self.provider == "openai":
-            from openai import OpenAI
-            self.client = OpenAI(api_key=api_key)
-        elif self.provider == "gemini":
-            from google import genai
-            self.client = genai.Client(api_key=api_key)
-        else:
-            raise ValueError(f"Unsupported provider: {self.provider}")
+        """Initialize the underlying SDK client."""
 
+    @abstractmethod
     def generate(
         self,
         prompt: str,
@@ -36,17 +47,50 @@ class LLMClient:
         max_tokens: int = 2048,
         temperature: float = 0.3,
     ) -> str:
-        """Generate a response from the LLM."""
-        if self.provider == "anthropic":
-            return self._generate_anthropic(prompt, system_prompt, max_tokens, temperature)
-        elif self.provider == "openai":
-            return self._generate_openai(prompt, system_prompt, max_tokens, temperature)
-        elif self.provider == "gemini":
-            return self._generate_gemini(prompt, system_prompt, max_tokens, temperature)
-        raise ValueError(f"Unsupported provider: {self.provider}")
+        """Generate a completion for the given prompt."""
 
-    def _generate_anthropic(
-        self, prompt: str, system_prompt: str, max_tokens: int, temperature: float,
+
+# --- Provider registry -----------------------------------------------------
+
+_LLM_PROVIDERS: dict[str, type[BaseLLMProvider]] = {}
+
+
+def register_llm_provider(
+    name: str,
+) -> Callable[[type[BaseLLMProvider]], type[BaseLLMProvider]]:
+    """Class decorator: register a provider implementation under ``name``."""
+
+    def wrapper(cls: type[BaseLLMProvider]) -> type[BaseLLMProvider]:
+        _LLM_PROVIDERS[name] = cls
+        return cls
+
+    return wrapper
+
+
+def available_llm_providers() -> list[str]:
+    """Return the sorted list of registered provider names."""
+    return sorted(_LLM_PROVIDERS)
+
+
+# --- Concrete providers ----------------------------------------------------
+
+@register_llm_provider("anthropic")
+class AnthropicProvider(BaseLLMProvider):
+    """Anthropic Claude models via the ``anthropic`` SDK."""
+
+    api_key_env = "ANTHROPIC_API_KEY"
+
+    def setup(self, api_key: str) -> None:
+        from anthropic import Anthropic
+
+        self.client = Anthropic(api_key=api_key)
+
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        max_tokens: int = 2048,
+        temperature: float = 0.3,
     ) -> str:
         response = self.client.messages.create(
             model=self.model,
@@ -57,8 +101,24 @@ class LLMClient:
         )
         return response.content[0].text
 
-    def _generate_openai(
-        self, prompt: str, system_prompt: str, max_tokens: int, temperature: float,
+
+@register_llm_provider("openai")
+class OpenAIProvider(BaseLLMProvider):
+    """OpenAI GPT models via the ``openai`` SDK."""
+
+    api_key_env = "OPENAI_API_KEY"
+
+    def setup(self, api_key: str) -> None:
+        from openai import OpenAI
+
+        self.client = OpenAI(api_key=api_key)
+
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        max_tokens: int = 2048,
+        temperature: float = 0.3,
     ) -> str:
         messages = []
         if system_prompt:
@@ -72,8 +132,24 @@ class LLMClient:
         )
         return response.choices[0].message.content
 
-    def _generate_gemini(
-        self, prompt: str, system_prompt: str, max_tokens: int, temperature: float,
+
+@register_llm_provider("gemini")
+class GeminiProvider(BaseLLMProvider):
+    """Google Gemini models via the ``google-genai`` SDK."""
+
+    api_key_env = "GEMINI_API_KEY"
+
+    def setup(self, api_key: str) -> None:
+        from google import genai
+
+        self.client = genai.Client(api_key=api_key)
+
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        max_tokens: int = 2048,
+        temperature: float = 0.3,
     ) -> str:
         from google.genai import types
 
@@ -87,3 +163,88 @@ class LLMClient:
             ),
         )
         return response.text
+
+
+# --- Facade (public, backward-compatible API) ------------------------------
+
+class LLMClient:
+    """Unified LLM client that delegates to a registered provider."""
+
+    # provider name -> API key env var. Built from the registry so it stays
+    # in sync automatically when new providers are registered above.
+    PROVIDER_API_KEY_ENV: ClassVar[dict[str, str]] = {
+        name: cls.api_key_env for name, cls in _LLM_PROVIDERS.items()
+    }
+
+    def __init__(
+        self,
+        provider: str = "anthropic",
+        model: str = "claude-sonnet-4-6",
+        max_retries: int = 6,
+    ):
+        if provider not in _LLM_PROVIDERS:
+            raise ValueError(
+                f"Unsupported provider: {provider}. "
+                f"Available: {available_llm_providers()}"
+            )
+        self.provider = provider
+        self.model = model
+        # How many times to wait-for-quota (after exhausting all keys) before
+        # giving up on a request.
+        self.max_retries = max_retries
+        self._impl: BaseLLMProvider = _LLM_PROVIDERS[provider](model)
+        self._keys: list[str] = [""]
+        self._key_idx: int = 0
+
+    def setup(self, api_key: str | list[str]) -> None:
+        """Initialize the LLM client for the configured provider.
+
+        ``api_key`` may be a single key or a list of keys (or a comma/space
+        separated string). Extra keys are used for rotation on rate limits.
+        """
+        self._keys = as_key_list(api_key)
+        self._key_idx = 0
+        self._impl.setup(self._keys[0])
+
+    def _rotate_key(self) -> bool:
+        """Switch the client to the next configured key. False if only one key."""
+        if len(self._keys) <= 1:
+            return False
+        self._key_idx = (self._key_idx + 1) % len(self._keys)
+        self._impl.setup(self._keys[self._key_idx])
+        return True
+
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        max_tokens: int = 2048,
+        temperature: float = 0.3,
+    ) -> str:
+        """Generate a response, rotating keys then waiting on rate-limit errors.
+
+        On a rate-limit error it first tries the remaining keys; only when they
+        are all throttled does it sleep for the provider-suggested delay and
+        start another round (up to ``max_retries`` waits).
+        """
+        waits = 0
+        rotations = 0
+        while True:
+            try:
+                return self._impl.generate(prompt, system_prompt, max_tokens, temperature)
+            except Exception as exc:
+                if not is_rate_limit_error(exc):
+                    raise
+                if rotations < len(self._keys) - 1 and self._rotate_key():
+                    rotations += 1
+                    continue
+                if waits >= self.max_retries:
+                    raise
+                time.sleep(retry_delay_seconds(exc))
+                waits += 1
+                rotations = 0
+
+    @property
+    def client(self):
+        """Expose the underlying SDK client (backward compatibility)."""
+        return self._impl.client

@@ -1,5 +1,6 @@
 """Dependencies - FastAPI dependency injection."""
 from functools import lru_cache
+from src.utils.helpers import resolve_api_keys
 from src.pipeline.config import PipelineConfig
 from src.embedding.product_embedder import ProductEmbedder
 from src.embedding.vector_store import VectorStore
@@ -25,9 +26,12 @@ def get_embedder(config: PipelineConfig | None = None) -> ProductEmbedder:
     embedder = ProductEmbedder(
         model_name=cfg.embedding_model,
         provider=cfg.embedding_provider,
+        embedding_dim=cfg.embedding_dim,
     )
-    import os
-    embedder.setup(api_key=os.getenv("OPENAI_API_KEY", ""))
+    env_var = ProductEmbedder.PROVIDER_API_KEY_ENV.get(
+        cfg.embedding_provider, "OPENAI_API_KEY"
+    )
+    embedder.setup(api_key=resolve_api_keys(env_var) or [""])
     return embedder
 
 
@@ -58,10 +62,8 @@ def get_llm_client(config: PipelineConfig | None = None) -> LLMClient:
     """Create and setup LLM client."""
     cfg = config or get_config()
     client = LLMClient(provider=cfg.llm_provider, model=cfg.llm_model)
-    import os
     env_var = LLMClient.PROVIDER_API_KEY_ENV.get(cfg.llm_provider, "")
-    api_key = os.getenv(env_var, "")
-    client.setup(api_key=api_key)
+    client.setup(api_key=resolve_api_keys(env_var) or [""])
     return client
 
 

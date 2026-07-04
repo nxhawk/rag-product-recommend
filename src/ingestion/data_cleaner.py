@@ -4,6 +4,8 @@ Data Cleaner - Làm sạch và chuẩn hóa dữ liệu sản phẩm.
 import re
 from typing import Any
 
+from src.utils.helpers import detect_brand, parse_price_text
+
 
 class DataCleaner:
     """Clean and normalize product data."""
@@ -16,17 +18,21 @@ class DataCleaner:
         return text
 
     def normalize_price(self, price: Any, currency: str = "VND") -> int:
-        """Normalize price to integer."""
+        """Normalize price to integer (first price-like number only for strings)."""
         if isinstance(price, str):
-            price = re.sub(r"[^\d]", "", price)
+            return parse_price_text(price)
         return int(price) if price else 0
 
     def build_product_profile(self, raw_product: dict) -> dict:
         """Build standardized product profile from raw data."""
+        name = self.clean_text(raw_product.get("name", ""))
+        # Prefer the brand inferred from the product name (maps product lines
+        # like iPhone/Redmi to their maker); fall back to the raw brand field.
+        raw_brand = str(raw_product.get("brand", "")).strip()
         return {
             "product_id": raw_product.get("id", ""),
-            "name": self.clean_text(raw_product.get("name", "")),
-            "brand": raw_product.get("brand", "").strip(),
+            "name": name,
+            "brand": detect_brand(name) or raw_brand,
             "category": raw_product.get("category", "").lower(),
             "price": self.normalize_price(raw_product.get("price", 0)),
             "currency": raw_product.get("currency", "VND"),

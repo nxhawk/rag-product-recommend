@@ -7,6 +7,8 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
+from src.utils.helpers import parse_price_text
+
 
 def make_soup(html: str) -> BeautifulSoup:
     """Build a BeautifulSoup tree, preferring lxml with a stdlib fallback."""
@@ -34,9 +36,13 @@ def select_attr(
 
 
 def parse_price(text: str) -> int:
-    """Extract an integer price (VND) from noisy text like '29.990.000₫'."""
-    digits = re.sub(r"[^\d]", "", text or "")
-    return int(digits) if digits else 0
+    """Extract an integer price (VND) from noisy text like '29.990.000₫'.
+
+    Delegates to :func:`src.utils.helpers.parse_price_text`, which uses only the
+    first price-like number so pages listing several prices (current +
+    struck-through original + installment) are not concatenated.
+    """
+    return parse_price_text(text)
 
 
 def parse_rating(text: str) -> float:

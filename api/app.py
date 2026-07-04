@@ -1,8 +1,12 @@
 """FastAPI Application - Entry point."""
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from api.routes.recommend import router as recommend_router
 from api.routes.compare import router as compare_router
 from api.routes.search import router as search_router
+
+# Load environment variables from .env (API keys read lazily at request time).
+load_dotenv()
 
 app = FastAPI(
     title="RAG Product Recommendation & Comparison API",

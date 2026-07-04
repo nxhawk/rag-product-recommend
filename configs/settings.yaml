@@ -3,19 +3,19 @@ project_name: "RAG Product Recommendation"
 environment: "development"
 
 # LLM
-llm_provider: "anthropic"
-llm_model: "claude-sonnet-4-6"
+llm_provider: "gemini"
+llm_model: "gemini-2.0-flash"
 llm_max_tokens: 2048
 llm_temperature: 0.3
 
 # Embedding
-embedding_provider: "openai"
-embedding_model: "text-embedding-3-small"
+embedding_provider: "gemini"
+embedding_model: "gemini-embedding-001"
 
 # Vector Database (Postgres + pgvector)
 vector_db: "pgvector"
 vector_db_url: "postgresql://postgres:postgres@localhost:5432/rag_products"  # overridden by DATABASE_URL env var
-embedding_dim: 1536
+embedding_dim: 768  # text-embedding-004 -> 768 dims (was 1536 for OpenAI text-embedding-3-small)
 
 # Retrieval
 top_k_retrieve: 20

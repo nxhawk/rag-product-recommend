@@ -139,7 +139,7 @@ def test_tgdd_parse_detail_minimal():
     assert product.name == "iPhone 15 Pro Max"
     assert product.price == 29990000
     assert product.avg_rating == 4.7
-    assert product.brand == "iPhone"
+    assert product.brand == "Apple"
     assert product.specifications.get("RAM") == "8 GB"
     assert product.id == "tgdd-iphone-15-pro-max"
 

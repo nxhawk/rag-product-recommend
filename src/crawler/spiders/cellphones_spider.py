@@ -25,6 +25,7 @@ from src.crawler.parser import (
     star_rating,
 )
 from src.crawler.spiders.base_spider import BaseSpider
+from src.utils.helpers import detect_brand
 
 # JSON keys review endpoints tend to use (checked case-insensitively).
 _LIST_KEYS = ("comments", "reviews", "data", "items", "listComment")
@@ -75,7 +76,7 @@ class CellphonesSpider(BaseSpider):
             name=name,
             source=self.name,
             source_url=url,
-            brand=self._guess_brand(name),
+            brand=detect_brand(name),
             category="smartphone",
             price=price,
             specifications=specs,
@@ -154,7 +155,3 @@ class CellphonesSpider(BaseSpider):
     @staticmethod
     def _slug_from_url(url: str) -> str:
         return url.rstrip("/").split("/")[-1].split("?")[0].replace(".html", "")
-
-    @staticmethod
-    def _guess_brand(name: str) -> str:
-        return name.split()[0] if name else ""
