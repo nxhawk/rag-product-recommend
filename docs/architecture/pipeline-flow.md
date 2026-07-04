@@ -89,10 +89,10 @@ The `UserIntentParser` analyzes the query to extract structured intent:
 
 Two things happen in parallel:
 
-1. **FilterEngine** extracts metadata filters from the query (brand, category, price range, minimum rating) using regex patterns on Vietnamese text.
-2. **ProductEmbedder** converts the query into a vector using OpenAI `text-embedding-3-small`.
+1. **FilterEngine** extracts metadata filters from the query (brand, category, price range, minimum rating) using regex patterns on both Vietnamese ("dưới 15 triệu") and English ("under 15 million") text.
+2. **ProductEmbedder** converts the query into a vector using the configured embedding provider (`embedding_provider`/`embedding_model` in `configs/settings.yaml`, e.g. Gemini `gemini-embedding-001` or OpenAI `text-embedding-3-small`).
 
-The `ProductRetriever` then queries Postgres (pgvector) with both the vector and metadata filters, retrieving `top_k × 3` candidates (over-fetching for the scoring step to narrow down).
+The `ProductRetriever` then queries Postgres (pgvector) with both the vector and the filters translated into SQL conditions — equality for brand/category, numeric ranges for price/rating (e.g. `(metadata->>'price')::numeric <= 15000000`) — retrieving `top_k × 3` candidates (over-fetching for the scoring step to narrow down). Over-budget products are excluded here, before scoring and prompting.
 
 **Source:** `src/retrieval/product_retriever.py`, `src/retrieval/filter_engine.py`
 
@@ -111,7 +111,7 @@ Products are sorted by `final_score` descending and truncated to `top_k`.
 
 **Step 4 — Generate LLM Response**
 
-The top products are formatted into a context string and injected into a prompt template along with the parsed intent. The LLM generates a Vietnamese response explaining why each product fits the user's needs. The `ResponseParser` extracts structured JSON from the LLM output.
+The top products are formatted into a context string (name, brand, price, rating, score — these fields come from the chunk metadata written at ingest time) and injected into a prompt template along with the parsed intent. The LLM is called in **native JSON mode** (Gemini `response_mime_type: application/json`, OpenAI `response_format: json_object`), so it returns strict JSON with no prose preamble. The `ResponseParser` parses it into `recommendations` + `summary`; if parsing ever fails, the raw text is returned as a fallback `summary`.
 
 **Source:** `src/pipeline/recommend_pipeline.py`, `src/generation/prompt_templates/recommend_prompt.py`
 

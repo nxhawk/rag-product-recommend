@@ -4,7 +4,7 @@ environment: "development"
 
 # LLM
 llm_provider: "gemini"
-llm_model: "gemini-2.0-flash"
+llm_model: "gemini-2.5-flash"
 llm_max_tokens: 2048
 llm_temperature: 0.3
 

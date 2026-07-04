@@ -45,10 +45,17 @@ class FilterEngine:
 
     def _extract_price(self, query: str) -> dict | None:
         patterns = [
+            # Vietnamese: "tầm/dưới/trên/từ X đến Y triệu"
             (r"tầm\s+(\d+)\s*triệu", lambda m: {"price_min": int(m.group(1)) * 800_000, "price_max": int(m.group(1)) * 1_200_000}),
             (r"dưới\s+(\d+)\s*triệu", lambda m: {"price_max": int(m.group(1)) * 1_000_000}),
             (r"trên\s+(\d+)\s*triệu", lambda m: {"price_min": int(m.group(1)) * 1_000_000}),
             (r"từ\s+(\d+)\s*đến\s+(\d+)\s*triệu", lambda m: {"price_min": int(m.group(1)) * 1_000_000, "price_max": int(m.group(2)) * 1_000_000}),
+            # English: "under/below/over/above X million", "from X to Y million",
+            # "around X million" (assumes VND millions, same as Vietnamese "triệu")
+            (r"(?:under|below|less than)\s+(\d+)\s*(?:million|mil|tr)\b", lambda m: {"price_max": int(m.group(1)) * 1_000_000}),
+            (r"(?:over|above|more than)\s+(\d+)\s*(?:million|mil|tr)\b", lambda m: {"price_min": int(m.group(1)) * 1_000_000}),
+            (r"from\s+(\d+)\s*to\s+(\d+)\s*(?:million|mil|tr)\b", lambda m: {"price_min": int(m.group(1)) * 1_000_000, "price_max": int(m.group(2)) * 1_000_000}),
+            (r"around\s+(\d+)\s*(?:million|mil|tr)\b", lambda m: {"price_min": int(m.group(1)) * 800_000, "price_max": int(m.group(1)) * 1_200_000}),
         ]
         for pattern, extractor in patterns:
             match = re.search(pattern, query)

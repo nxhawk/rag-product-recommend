@@ -46,8 +46,14 @@ class BaseLLMProvider(ABC):
         system_prompt: str = "",
         max_tokens: int = 2048,
         temperature: float = 0.3,
+        json_output: bool = False,
     ) -> str:
-        """Generate a completion for the given prompt."""
+        """Generate a completion for the given prompt.
+
+        ``json_output=True`` requests strict JSON output using the provider's
+        native JSON mode where available (Gemini, OpenAI); providers without
+        one fall back to prompt instructions (Anthropic).
+        """
 
 
 # --- Provider registry -----------------------------------------------------
@@ -91,7 +97,10 @@ class AnthropicProvider(BaseLLMProvider):
         system_prompt: str = "",
         max_tokens: int = 2048,
         temperature: float = 0.3,
+        json_output: bool = False,
     ) -> str:
+        # Anthropic has no dedicated JSON mode; JSON format is enforced via
+        # the prompt (json_output intentionally unused here).
         response = self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
@@ -119,17 +128,21 @@ class OpenAIProvider(BaseLLMProvider):
         system_prompt: str = "",
         max_tokens: int = 2048,
         temperature: float = 0.3,
+        json_output: bool = False,
     ) -> str:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        kwargs: dict = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if json_output:
+            kwargs["response_format"] = {"type": "json_object"}
+        response = self.client.chat.completions.create(**kwargs)
         return response.choices[0].message.content
 
 
@@ -150,17 +163,23 @@ class GeminiProvider(BaseLLMProvider):
         system_prompt: str = "",
         max_tokens: int = 2048,
         temperature: float = 0.3,
+        json_output: bool = False,
     ) -> str:
         from google.genai import types
 
         full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+        config_kwargs: dict = {
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if json_output:
+            # Native JSON mode: no prose preamble/markdown fences, so the
+            # response parses reliably and fits within max_output_tokens.
+            config_kwargs["response_mime_type"] = "application/json"
         response = self.client.models.generate_content(
             model=self.model,
             contents=full_prompt,
-            config=types.GenerateContentConfig(
-                max_output_tokens=max_tokens,
-                temperature=temperature,
-            ),
+            config=types.GenerateContentConfig(**config_kwargs),
         )
         return response.text
 
@@ -220,6 +239,7 @@ class LLMClient:
         system_prompt: str = "",
         max_tokens: int = 2048,
         temperature: float = 0.3,
+        json_output: bool = False,
     ) -> str:
         """Generate a response, rotating keys then waiting on rate-limit errors.
 
@@ -231,7 +251,9 @@ class LLMClient:
         rotations = 0
         while True:
             try:
-                return self._impl.generate(prompt, system_prompt, max_tokens, temperature)
+                return self._impl.generate(
+                    prompt, system_prompt, max_tokens, temperature, json_output
+                )
             except Exception as exc:
                 if not is_rate_limit_error(exc):
                     raise

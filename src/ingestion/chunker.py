@@ -10,11 +10,17 @@ class ProductChunker:
     def chunk_product(self, product: dict) -> list[dict]:
         """Split a product profile into multiple typed chunks."""
         chunks = []
+        # These fields become the vector-store metadata for every chunk.
+        # "name" and "avg_rating" are required downstream: the recommend
+        # pipeline renders them into the LLM product context (missing keys
+        # showed up as "N/A" and degraded answer quality).
         base_metadata = {
             "product_id": product["product_id"],
+            "name": product["name"],
             "brand": product["brand"],
             "category": product["category"],
             "price": product["price"],
+            "avg_rating": product.get("avg_rating", 0),
         }
 
         # Chunk 1: General description

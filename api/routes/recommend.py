@@ -1,15 +1,59 @@
 """Recommend Route - POST /api/recommend"""
-from fastapi import APIRouter
+
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from api.deps import get_cached_recommend_pipeline
 from api.schemas import RecommendRequest, RecommendResponse
+from src.pipeline.recommend_pipeline import RecommendPipeline
+from src.utils.helpers import is_rate_limit_error
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
+def _log_pipeline_error(query: str, exc: Exception) -> None:
+    """Log pipeline failures without flooding the console.
+
+    Expected provider errors (rate limit / quota) are summarized on a single
+    line; only unexpected errors keep the full traceback for debugging.
+    """
+    if is_rate_limit_error(exc):
+        summary = str(exc).splitlines()[0][:300]
+        logger.error("Recommend failed - provider quota/429 (query=%r): %s", query, summary)
+    else:
+        logger.exception("Recommend pipeline failed for query: %s", query)
+
+
+def _error_detail(exc: Exception) -> str:
+    """User-facing (Vietnamese) error message for a pipeline failure."""
+    if is_rate_limit_error(exc):
+        return "Hệ thống đã hết hạn mức gọi AI, vui lòng thử lại sau ít phút."
+    return "Hệ thống gợi ý đang gặp sự cố, vui lòng thử lại sau."
+
+
 @router.post("/recommend", response_model=RecommendResponse)
-async def recommend_products(request: RecommendRequest):
-    """Gợi ý sản phẩm dựa trên nhu cầu người dùng."""
-    # TODO: Initialize pipeline and run
-    return RecommendResponse(
-        recommendations=[],
-        summary="Pipeline chưa được khởi tạo.",
-    )
+def recommend_products(
+    request: RecommendRequest,
+    pipeline: RecommendPipeline = Depends(get_cached_recommend_pipeline),
+) -> RecommendResponse:
+    """Run the recommendation pipeline for a natural-language query.
+
+    Defined as a sync endpoint on purpose: the pipeline performs
+    blocking I/O (vector DB + LLM calls), so FastAPI runs it in its
+    threadpool instead of blocking the event loop.
+    """
+    try:
+        result = pipeline.run(request.query, top_k=request.top_k)
+    except Exception as exc:
+        _log_pipeline_error(request.query, exc)
+        raise HTTPException(status_code=503, detail=_error_detail(exc)) from exc
+
+    # The LLM returns {"recommendations": [...], "summary": "..."} per the
+    # prompt contract; on unparseable output the parser falls back to
+    # {"text": "...", "structured": False}.
+    recommendations = result.get("recommendations") or []
+    summary = result.get("summary") or result.get("text") or ""
+    return RecommendResponse(recommendations=recommendations, summary=summary)

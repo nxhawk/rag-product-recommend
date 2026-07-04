@@ -89,10 +89,10 @@ flowchart LR
 
 Hai việc diễn ra song song:
 
-1. **FilterEngine** trích xuất metadata filter từ truy vấn (thương hiệu, danh mục, khoảng giá, rating tối thiểu) bằng regex pattern trên văn bản tiếng Việt.
-2. **ProductEmbedder** chuyển truy vấn thành vector bằng model `text-embedding-3-small` của OpenAI.
+1. **FilterEngine** trích xuất metadata filter từ truy vấn (thương hiệu, danh mục, khoảng giá, rating tối thiểu) bằng regex pattern trên cả văn bản tiếng Việt ("dưới 15 triệu") lẫn tiếng Anh ("under 15 million").
+2. **ProductEmbedder** chuyển truy vấn thành vector bằng embedding provider đã cấu hình (`embedding_provider`/`embedding_model` trong `configs/settings.yaml`, ví dụ Gemini `gemini-embedding-001` hoặc OpenAI `text-embedding-3-small`).
 
-`ProductRetriever` sau đó truy vấn Postgres (pgvector) với cả vector lẫn metadata filter, lấy về `top_k × 3` ứng viên (lấy dư để bước chấm điểm thu hẹp lại).
+`ProductRetriever` sau đó truy vấn Postgres (pgvector) với cả vector lẫn các filter đã dịch thành điều kiện SQL — so sánh bằng cho thương hiệu/danh mục, khoảng số cho giá/rating (ví dụ `(metadata->>'price')::numeric <= 15000000`) — lấy về `top_k × 3` ứng viên (lấy dư để bước chấm điểm thu hẹp lại). Sản phẩm vượt ngân sách bị loại ngay tại đây, trước khi chấm điểm và đưa vào prompt.
 
 **Nguồn:** `src/retrieval/product_retriever.py`, `src/retrieval/filter_engine.py`
 
@@ -111,7 +111,7 @@ Sản phẩm được sắp xếp giảm dần theo `final_score` và cắt còn
 
 **Bước 4 — Sinh phản hồi bằng LLM**
 
-Các sản phẩm hàng đầu được định dạng thành chuỗi ngữ cảnh (context) và chèn vào prompt template cùng ý định đã phân tích. LLM sinh phản hồi bằng tiếng Việt giải thích lý do từng sản phẩm phù hợp với nhu cầu người dùng. `ResponseParser` trích xuất JSON có cấu trúc từ output của LLM.
+Các sản phẩm hàng đầu được định dạng thành chuỗi ngữ cảnh (tên, thương hiệu, giá, rating, điểm — các trường này lấy từ metadata của chunk được ghi lúc ingest) và chèn vào prompt template cùng ý định đã phân tích. LLM được gọi ở **JSON mode gốc** (Gemini `response_mime_type: application/json`, OpenAI `response_format: json_object`) nên trả về JSON chuẩn, không có đoạn văn mở đầu. `ResponseParser` parse thành `recommendations` + `summary`; nếu parse thất bại, nguyên văn text được trả về làm `summary` dự phòng.
 
 **Nguồn:** `src/pipeline/recommend_pipeline.py`, `src/generation/prompt_templates/recommend_prompt.py`
 

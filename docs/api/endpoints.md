@@ -19,15 +19,26 @@ GET /health
 POST /api/recommend
 ```
 
-Find products matching a user's natural language query.
+Find products matching a user's natural language query and generate an
+LLM-written explanation (in Vietnamese) of why each product fits.
 
 **Request Body:**
 
 | Field     | Type   | Required | Default | Description                    |
 | --------- | ------ | -------- | ------- | ------------------------------ |
-| `query`   | string | Yes      | —       | Natural language product query |
+| `query`   | string | Yes      | —       | Natural language product query (Vietnamese or English) |
 | `top_k`   | int    | No       | 5       | Number of recommendations      |
-| `filters` | object | No       | null    | Additional filter overrides     |
+| `filters` | object | No       | null    | Reserved for future use — filters are currently extracted automatically from `query` by the `FilterEngine` |
+
+Filters extracted from the query and applied **at the vector-store level**
+(products failing them never reach the LLM):
+
+| Filter      | Example phrases                                             |
+| ----------- | ----------------------------------------------------------- |
+| Price range | "dưới 15 triệu", "tầm 10 triệu", "từ 10 đến 20 triệu", "under 15 million", "from 10 to 20 million", "around 10 million" |
+| Brand       | "Samsung", "iPhone" (mapped to canonical brand)              |
+| Category    | "điện thoại"/"phone" → smartphone, "laptop", "tai nghe", ... |
+| Min rating  | "đánh giá tốt", "rating cao" → ≥ 4.0                        |
 
 **Example:**
 
@@ -38,6 +49,11 @@ curl -X POST http://localhost:8000/api/recommend \
 ```
 
 **Response:**
+
+| Field             | Type   | Description                                        |
+| ----------------- | ------ | -------------------------------------------------- |
+| `recommendations` | array  | LLM-ranked products with reasoning (see below)     |
+| `summary`         | string | Overall summary of the recommendations (Vietnamese) |
 
 ```json
 {
@@ -54,6 +70,80 @@ curl -X POST http://localhost:8000/api/recommend \
   "summary": "Top picks based on camera quality within your budget"
 }
 ```
+
+The LLM is called in **native JSON mode** (Gemini `response_mime_type`,
+OpenAI `response_format`), so the output is machine-parseable JSON with no
+prose preamble. In the rare case parsing still fails, `recommendations` is
+empty and `summary` contains the raw LLM text as a fallback.
+
+**Errors:**
+
+| Status | `detail` message | Meaning |
+| ------ | ---------------- | ------- |
+| `422`  | (FastAPI validation) | Invalid request body (e.g. missing `query`) |
+| `503`  | "Hệ thống đã hết hạn mức gọi AI…" | LLM/embedding provider quota exhausted (429). The API fails fast — no quota-wait sleeps — and logs a one-line summary |
+| `503`  | "Hệ thống gợi ý đang gặp sự cố…" | Any other pipeline failure (vector DB unreachable, provider error…). Full traceback is logged server-side |
+
+### How it works
+
+The endpoint is wired to the full RAG pipeline through FastAPI dependency
+injection (`api/deps.py`):
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as POST /api/recommend
+    participant D as get_cached_recommend_pipeline()
+    participant P as RecommendPipeline
+    participant V as VectorStore (pgvector)
+    participant L as LLM Provider
+
+    C->>A: {query, top_k}
+    A->>D: Depends()
+    Note over D: First call builds the pipeline<br/>(embedder + vector store + LLM client),<br/>then it is cached via lru_cache
+    D-->>A: RecommendPipeline
+    A->>P: run(query, top_k)
+    P->>P: Parse intent (budget, use case, priorities)
+    P->>V: Vector search + SQL filters:<br/>price range, brand, category (top_k × 3)
+    P->>P: Score & rank candidates, keep top_k
+    P->>L: Prompt with intent + product context<br/>(native JSON mode)
+    L-->>P: Strict JSON answer (Vietnamese)
+    P-->>A: {recommendations, summary}
+    A-->>C: 200 RecommendResponse
+```
+
+Key implementation details:
+
+1. **Pipeline construction is cached.** `get_cached_recommend_pipeline()` in
+   `api/deps.py` builds the pipeline once per process (embedder setup, vector
+   DB connection, LLM client) and reuses it for every request.
+2. **The route is a sync (`def`) endpoint on purpose.** The pipeline performs
+   blocking I/O (Postgres query, LLM HTTP call), so FastAPI executes it in its
+   threadpool instead of blocking the event loop.
+3. **Errors return `503` and fail fast.** The API path uses `max_retries=0`
+   for provider calls (no quota-wait sleeps) and a 5s DB connect timeout, so
+   a broken dependency answers in seconds instead of hanging. Quota errors
+   (429) are logged as a single line; unexpected errors keep the full
+   traceback. Internal details are never leaked in the response.
+4. **Strict JSON output.** The LLM is invoked in native JSON mode, so the
+   response always parses into `recommendations` + `summary` instead of
+   free-form prose.
+5. **Budget is enforced at retrieval.** Price/brand/category/rating filters
+   extracted from the query become SQL conditions on the vector search
+   (e.g. `(metadata->>'price')::numeric <= 15000000`), so over-budget
+   products are excluded before scoring and prompting.
+6. **Configuration** comes from `configs/settings.yaml` (embedding model,
+   vector DB URL, LLM provider/model) and API keys from environment variables
+   (`.env` is loaded at startup). Multiple keys per provider are supported
+   (`GEMINI_API_KEY=key_a,key_b` or `GEMINI_API_KEY_1=...`) and rotated
+   automatically on rate-limit errors.
+
+For the internal steps of the pipeline itself (intent parsing, retrieval,
+scoring, generation) see [Pipeline Flow](../architecture/pipeline-flow.md#recommend-pipeline).
+
+**Prerequisites:** products must be ingested into the vector store first
+(`uv run python scripts/ingest.py`), and the embedding/LLM provider API keys
+must be set in `.env` — otherwise the endpoint responds with `503`.
 
 ## Compare Products
 

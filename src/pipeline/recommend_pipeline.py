@@ -2,6 +2,9 @@
 Recommend Pipeline - Pipeline gợi ý sản phẩm end-to-end.
 Query → Intent Parser → Filter → Retrieve → Score → Rank → Prompt → LLM → Response
 """
+import logging
+import time
+
 from src.pipeline.recommend.engine import RecommendEngine
 from src.generation.llm_client import LLMClient
 from src.generation.response_parser import ResponseParser
@@ -9,6 +12,8 @@ from src.generation.prompt_templates.recommend_prompt import (
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RecommendPipeline:
@@ -22,7 +27,9 @@ class RecommendPipeline:
     def run(self, query: str, top_k: int = 5) -> dict:
         """Run the full recommendation pipeline."""
         # Step 1: Get recommendations with scores
+        t0 = time.perf_counter()
         result = self.recommend_engine.recommend(query, top_k=top_k)
+        t_retrieve = time.perf_counter() - t0
 
         # Step 2: Build context for LLM
         product_context = self._build_context(result["recommendations"])
@@ -36,7 +43,19 @@ class RecommendPipeline:
             product_context=product_context,
             top_k=top_k,
         )
-        llm_response = self.llm_client.generate(prompt, system_prompt=SYSTEM_PROMPT)
+        t1 = time.perf_counter()
+        llm_response = self.llm_client.generate(
+            prompt, system_prompt=SYSTEM_PROMPT, json_output=True
+        )
+        t_llm = time.perf_counter() - t1
+
+        # Step timings make slow requests diagnosable from the server log.
+        logger.info(
+            "Recommend pipeline done: retrieve=%.2fs llm=%.2fs candidates=%d",
+            t_retrieve,
+            t_llm,
+            len(result["recommendations"]),
+        )
 
         # Step 4: Parse response
         parsed = self.parser.parse_recommendation(llm_response)

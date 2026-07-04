@@ -33,12 +33,17 @@ class VectorStore:
         1. ``dsn`` keyword argument
         2. ``DATABASE_URL`` environment variable
         3. Local default (``localhost:5432/rag_products``)
+
+        ``connect_timeout`` (seconds, default 5) caps how long the initial
+        connection may take, so an unreachable database fails fast instead of
+        hanging for the OS-level TCP timeout (minutes on some systems).
         """
         import psycopg
         from pgvector.psycopg import register_vector
 
         dsn = kwargs.get("dsn") or os.getenv("DATABASE_URL", DEFAULT_DSN)
-        self.conn = psycopg.connect(dsn, autocommit=True)
+        connect_timeout = kwargs.get("connect_timeout", 5)
+        self.conn = psycopg.connect(dsn, autocommit=True, connect_timeout=connect_timeout)
         self.conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
         register_vector(self.conn)
         self.conn.execute(
@@ -127,11 +132,17 @@ class VectorStore:
             self.conn.close()
             self.conn = None
 
+    # Whitelisted comparison operators for numeric metadata filters.
+    _OPERATORS = {"$eq": "=", "$lt": "<", "$lte": "<=", "$gt": ">", "$gte": ">="}
+
     def _build_where_sql(self, where: Optional[dict]) -> tuple[str, list[Any]]:
         """Translate a metadata filter dict into a SQL WHERE clause.
 
-        Supports simple equality filters (``{"brand": "Apple"}``) and
-        ``{"$and": [{...}, {...}]}`` composites over JSONB metadata.
+        Supports simple equality filters (``{"brand": "Apple"}``), numeric
+        range filters (``{"price": {"$lte": 15000000}}`` with ``$eq``/``$lt``/
+        ``$lte``/``$gt``/``$gte``) and ``{"$and": [{...}, {...}]}`` composites
+        over JSONB metadata. All keys and values are passed as bound
+        parameters; operators come from a fixed whitelist.
         """
         if not where:
             return "", []
@@ -141,8 +152,16 @@ class VectorStore:
         params: list[Any] = []
         for condition in conditions:
             for key, value in condition.items():
-                clauses.append("metadata->>%s = %s")
-                params.extend([key, str(value)])
+                if isinstance(value, dict):
+                    for op, op_value in value.items():
+                        sql_op = self._OPERATORS.get(op)
+                        if sql_op is None:
+                            continue
+                        clauses.append(f"(metadata->>%s)::numeric {sql_op} %s")
+                        params.extend([key, op_value])
+                else:
+                    clauses.append("metadata->>%s = %s")
+                    params.extend([key, str(value)])
         if not clauses:
             return "", []
         return "WHERE " + " AND ".join(clauses), params

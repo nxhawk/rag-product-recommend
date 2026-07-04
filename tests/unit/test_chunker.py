@@ -22,3 +22,7 @@ def test_chunk_product():
     assert len(chunks) == 4  # description, specs, pros_cons, review
     assert all("product_id" in c for c in chunks)
     assert all("chunk_type" in c for c in chunks)
+    # Required by the recommend pipeline's LLM context builder.
+    assert all(c["name"] == "Test Phone" for c in chunks)
+    assert all(c["avg_rating"] == 4.2 for c in chunks)
+    assert all(c["price"] == 10000000 for c in chunks)

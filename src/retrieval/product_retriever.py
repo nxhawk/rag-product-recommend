@@ -45,11 +45,22 @@ class ProductRetriever:
         return scored[:top_k]
 
     def _build_where_clause(self, filters: dict) -> dict | None:
-        conditions = []
+        conditions: list[dict] = []
         if "brand" in filters:
             conditions.append({"brand": filters["brand"]})
         if "category" in filters:
             conditions.append({"category": filters["category"]})
+        # Push the budget down to the vector store so over-budget products
+        # never reach the LLM context (scoring alone only downranks them).
+        price_range: dict = {}
+        if "price_min" in filters:
+            price_range["$gte"] = filters["price_min"]
+        if "price_max" in filters:
+            price_range["$lte"] = filters["price_max"]
+        if price_range:
+            conditions.append({"price": price_range})
+        if "min_rating" in filters:
+            conditions.append({"avg_rating": {"$gte": filters["min_rating"]}})
         if not conditions:
             return None
         if len(conditions) == 1:
