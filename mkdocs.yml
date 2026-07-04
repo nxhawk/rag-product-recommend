@@ -88,6 +88,7 @@ plugins:
             Development: Phát triển
             Contributing: Đóng góp
             Crawler: Crawler
+            Ingestion: Nạp dữ liệu
             Testing: Kiểm thử
 
 nav:
@@ -112,4 +113,5 @@ nav:
   - Development:
       - Contributing: development/contributing.md
       - Crawler: development/crawler.md
+      - Ingestion: development/ingestion.md
       - Testing: development/testing.md
