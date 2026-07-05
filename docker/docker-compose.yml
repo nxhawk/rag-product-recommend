@@ -72,6 +72,24 @@ services:
       timeout: 5s
       retries: 20
 
+  # Kibana - web UI to browse/query Elasticsearch (Discover + Dev Tools).
+  # Version pinned to the Elasticsearch image above. Open http://localhost:5601,
+  # then create a Data View for the `product_chunks` index to browse it as a grid.
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.14.3
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5601/api/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
   kafka:
     image: apache/kafka:3.7.2
     environment:

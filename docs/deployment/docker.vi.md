@@ -1,118 +1,327 @@
 # Triển khai với Docker
 
-Hướng dẫn này bao gồm hai cách chạy dự án với Docker: build cục bộ bằng Docker Compose, hoặc pull image đã build sẵn từ GitHub Container Registry (GHCR).
+Repository cung cấp một stack **Docker Compose** đầy đủ, chạy toàn bộ kiến trúc
+CDC chỉ với một lệnh: API, cả hai datastore (Postgres + pgvector và
+Elasticsearch), pipeline change-data-capture Kafka + Debezium, hai sync worker,
+Redis, và **Kibana** để xem dữ liệu Elasticsearch.
 
-## Cách 1 — Docker Compose (Build cục bộ)
+Có hai cách chạy dự án:
 
-Phù hợp nhất cho phát triển cục bộ. Build image từ source và khởi động API server cùng Postgres (pgvector) và Redis.
+- **Cách 1 — Docker Compose (full stack)** — khuyến nghị cho phát triển local. Mọi thứ được nối sẵn, nên thay đổi sản phẩm sẽ tự chảy qua CDC tới cả hai index tìm kiếm.
+- **Cách 2 — Image dựng sẵn trên GHCR (tối giản)** — bản triển khai nhẹ chỉ gồm API + Postgres + Redis, không có Elasticsearch/Kafka (nhánh keyword tự fallback về BM25 in-memory).
+
+## Kiến trúc stack
+
+Stack Compose là bản hiện thực tham chiếu của
+[luồng dữ liệu](../architecture/data-flow.vi.md) hệ thống: bảng
+`product_catalog` là source of truth duy nhất, và mọi thay đổi đều được pipeline
+CDC lan truyền tới hai index tìm kiếm dẫn xuất.
+
+```mermaid
+flowchart LR
+    U["localhost:8000\nAPI"] --> APP["app\n(FastAPI)"]
+    KB["localhost:5601\nKibana"] --> ES
+
+    APP -->|"ghi CRUD"| PG[("postgres\nproduct_catalog + products/pgvector")]
+    APP -->|"semantic search"| PG
+    APP -->|"keyword search"| ES[("elasticsearch\nproduct_chunks")]
+    APP -.->|"cache"| RD["redis"]
+
+    PG -->|"WAL (logical)"| CN["connect\n(Debezium)"]
+    CN -->|"change events"| KF["kafka\nragshop.public.product_catalog"]
+    KF --> IW["indexer-worker"]
+    KF --> EW["embedding-worker"]
+    IW --> ES
+    EW --> PG
+```
+
+`postgres` đảm nhận hai vai trò: chứa bảng `product_catalog` (**nguồn** của CDC)
+và bảng `products` + pgvector (index semantic, **đích** của CDC). Debezium chỉ
+capture `product_catalog`, nên việc embedding worker ghi vector ngược lại vào
+`products` không bao giờ tạo vòng lặp.
+
+---
+
+## Cách 1 — Docker Compose (Full Stack)
 
 ### Yêu cầu
 
 - Docker Engine 20.10+
-- Docker Compose v2
+- Docker Compose v2 (`docker compose`, không phải `docker-compose` cũ)
+- ~4 GB RAM trống (Elasticsearch, Kafka và Postgres đều ngốn bộ nhớ)
+- API key cho provider đang cấu hình (mặc định là Gemini)
 
-### Chạy
+### 1. Cấu hình biến môi trường
 
-```bash
-# 1. Cấu hình biến môi trường
-cp .env.example .env
-# Chỉnh sửa .env với API key của bạn
+Tạo file `.env` ở **thư mục gốc repository** (repo không kèm sẵn
+`.env.example`). Service `app` và `embedding-worker` đọc nó qua
+`env_file: ../.env`:
 
-# 2. Khởi động tất cả service
-cd docker
-docker compose up --build
+```dotenv
+# Provider mặc định là Gemini (dùng cho cả LLM và embedding)
+GEMINI_API_KEY=AIza...
+
+# Tùy chọn — chỉ khi bạn đổi provider trong configs/settings.yaml
+# ANTHROPIC_API_KEY=sk-ant-...
+# OPENAI_API_KEY=sk-...
 ```
 
-Lệnh này khởi động toàn bộ stack CDC:
+Compose tự inject các biến kết nối hạ tầng (`DATABASE_URL`, `ELASTICSEARCH_URL`,
+`KAFKA_BOOTSTRAP_SERVERS`, `KEYWORD_BACKEND`) — bạn **không** cần đặt chúng trong
+`.env`.
 
-| Service | Port | Mô tả |
-| ------- | ---- | ----------- |
-| **app** | `8000` | FastAPI server (keyword backend: Elasticsearch) |
-| **postgres** | `5432` | Postgres + pgvector — catalog (source of truth) + vectors; `wal_level=logical` cho CDC |
-| **elasticsearch** | `9200` | Index keyword/BM25 (`product_chunks`) |
-| **kafka** | — | Event stream (KRaft single-node) |
-| **connect** | `8083` | Debezium (Kafka Connect) — bắt thay đổi bảng `product_catalog` |
-| **connect-init** | — | Chạy một lần: đăng ký Debezium connector (`docker/debezium/`) rồi thoát |
-| **indexer-worker** | — | CDC consumer → Elasticsearch |
-| **embedding-worker** | — | CDC consumer → pgvector (chỉ re-embed khi text đổi) |
-| **redis** | `6379` | Redis cache |
-
-Tạo/cập nhật/xóa sản phẩm qua `POST/PUT/DELETE /api/products` tự lan truyền
-sang cả hai index tìm kiếm (xem
-[Truy xuất lai](../architecture/hybrid-retrieval.md)).
-
-API có sẵn tại `http://localhost:8000`. Tài liệu tương tác tại `http://localhost:8000/docs`.
-
-### Dừng
+### 2. Khởi động stack
 
 ```bash
-docker compose down
+cd docker
+docker compose up --build -d
+```
 
-# Xóa cả volume (xóa dữ liệu đã cache)
-docker compose down -v
+Lần chạy đầu sẽ build image app và pull các image Elasticsearch, Kafka, Kibana,
+Debezium (vài GB), nên hãy đợi 1–2 phút. Compose chặn khởi động theo health
+check (xem bên dưới), và `connect-init` đăng ký Debezium connector khi mọi thứ
+đã sẵn sàng.
+
+### Các service
+
+| Service | Image | Cổng host | Phụ thuộc (healthy) | Vai trò |
+| ------- | ----- | --------- | ------------------- | ------- |
+| **app** | build từ `docker/Dockerfile` | `8000` | postgres, elasticsearch, redis | FastAPI server; `KEYWORD_BACKEND=elasticsearch` |
+| **postgres** | `pgvector/pgvector:pg16` | `5432` | — | Catalog (source of truth) + pgvector; chạy với `wal_level=logical` cho CDC |
+| **elasticsearch** | `docker.elastic.co/elasticsearch/elasticsearch:8.14.3` | `9200` | — | Index keyword/BM25 `product_chunks` (đã tắt security, single-node) |
+| **kibana** | `docker.elastic.co/kibana/kibana:8.14.3` | `5601` | elasticsearch | Web UI để xem/query Elasticsearch |
+| **kafka** | `apache/kafka:3.7.2` | — (`9092` nội bộ) | — | Event stream, single-node KRaft (không ZooKeeper) |
+| **connect** | `debezium/connect:2.7.3.Final` | `8083` | kafka, postgres | Kafka Connect chạy Debezium Postgres connector |
+| **connect-init** | `curlimages/curl:8.8.0` | — | connect | One-shot: `PUT` cấu hình connector từ `docker/debezium/` rồi thoát |
+| **indexer-worker** | build từ `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch |
+| **embedding-worker** | build từ `docker/Dockerfile` | — | kafka, postgres | `sync_worker.py --role embedder` → pgvector (chỉ re-embed khi text đổi) |
+| **redis** | `redis:7-alpine` | `6379` | — | Cache |
+
+### Thứ tự khởi động & health gating
+
+Compose không khởi động một service cho tới khi các phụ thuộc báo **healthy**:
+
+- `postgres`, `elasticsearch` và `kafka` có health check; mọi service nói chuyện với chúng đều đợi (`depends_on: condition: service_healthy`).
+- `connect-init` đợi `connect` healthy, `PUT`
+  `docker/debezium/product-catalog-connector.json` tới
+  `http://connect:8083/connectors/product-catalog-connector/config`
+  (idempotent — an toàn ở mỗi lần `up`), in xác nhận, rồi thoát với `restart: "no"`.
+- `indexer-worker` và `embedding-worker` chạy với `restart: unless-stopped`; lần đầu khởi động chúng consume **initial snapshot** của Debezium (`auto.offset.reset=earliest`) — đó là cách một index mới được bootstrap.
+- `app` chỉ phụ thuộc `postgres`, `elasticsearch` và `redis` — không phụ thuộc Kafka/Connect — nên API có thể phục vụ đọc trong khi pipeline CDC còn đang khởi động.
+
+### 3. Nạp dữ liệu (lần đầu)
+
+Stack **không** tự nạp dữ liệu. Seed catalog và index một lần khi các service đã
+lên:
+
+```bash
+# Ghi cả ba đích: product_catalog + pgvector + Elasticsearch
+docker compose exec app uv run python scripts/ingest.py
+
+# Cách khác: chỉ ghi catalog source-of-truth và để CDC worker
+# tự dựng cả hai index từ Debezium snapshot
+docker compose exec app uv run python scripts/ingest.py --catalog-only
+```
+
+Sau đó, các thay đổi qua `POST/PUT/DELETE /api/products` sẽ tự lan truyền tới cả
+hai index qua CDC — xem
+[Truy xuất lai](../architecture/hybrid-retrieval.vi.md#cdc-architecture-how-the-indexes-stay-fresh)
+và [sync_worker.py](../scripts/sync-worker.vi.md).
+
+### 4. Kiểm tra mọi thứ đã nối đúng
+
+```bash
+# API đã lên chưa?
+curl http://localhost:8000/health
+
+# Một request gợi ý (cần đã nạp dữ liệu + có provider key)
+curl -X POST http://localhost:8000/api/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Điện thoại chụp ảnh đẹp dưới 15 triệu", "top_k": 3}'
+
+# Debezium connector đã đăng ký & đang chạy?
+curl http://localhost:8083/connectors/product-catalog-connector/status
+
+# Index keyword Elasticsearch đã có dữ liệu?
+curl "http://localhost:9200/product_chunks/_count?pretty"
+```
+
+API ở `http://localhost:8000` (docs tương tác ở `http://localhost:8000/docs`);
+Kibana ở `http://localhost:5601`.
+
+---
+
+## Quản lý stack
+
+### Khởi động / dừng một phần
+
+```bash
+docker compose up -d postgres elasticsearch kafka   # chỉ hạ tầng
+docker compose up -d kibana                          # thêm Kibana sau
+docker compose stop indexer-worker embedding-worker  # tạm dừng CDC worker
+docker compose restart connect-init                  # đăng ký lại connector
+```
+
+### Logs
+
+```bash
+docker compose logs -f app                # API
+docker compose logs -f embedding-worker   # CDC → pgvector
+docker compose logs -f indexer-worker     # CDC → Elasticsearch
+docker compose logs -f connect            # Debezium
+docker compose logs connect-init          # kết quả đăng ký connector
 ```
 
 ### Rebuild sau khi đổi code
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-Docker layer caching có nghĩa là chỉ layer thay đổi mới được rebuild. Thay đổi dependency (sửa `pyproject.toml`) kích hoạt cài đặt lại toàn bộ; thay đổi chỉ ở code thì nhanh hơn nhiều.
+Docker layer caching nghĩa là chỉ layer thay đổi mới build lại. Sửa
+`pyproject.toml` sẽ kích hoạt cài lại toàn bộ dependency; đổi code thuần thì
+nhanh.
 
-### Lưu trữ dữ liệu bền vững
-
-Vector được lưu trong Postgres, persist qua named volume `pgdata`. Thư mục `data/` vẫn được mount cho dữ liệu sản phẩm thô:
-
-```yaml
-volumes:
-  - ../data:/app/data   # dữ liệu thô (service app)
-  - pgdata:/var/lib/postgresql/data   # vector (service postgres)
-```
-
-Nếu cần một vector store sạch, xóa volume và chạy lại ingestion:
+### Dừng & reset
 
 ```bash
-docker compose down -v   # xóa pgdata
-docker compose up -d
-docker compose exec app uv run python scripts/ingest.py
+docker compose down          # dừng, giữ volume dữ liệu
+docker compose down -v       # xóa luôn volume (pgdata, esdata, kafkadata)
+```
+
+Xóa volume sẽ wipe catalog, vector, index Elasticsearch **và** log Kafka (gồm cả
+Debezium offset), nên lần `up` + `ingest` kế tiếp bắt đầu hoàn toàn sạch.
+
+---
+
+## Xem dữ liệu
+
+### Elasticsearch — Kibana
+
+Xem **[Xem dữ liệu trong Kibana](kibana.vi.md)** để có hướng dẫn đầy đủ (query
+Dev Tools, Discover data view, bộ lọc KQL, tham chiếu field). Bản nhanh — mở
+`http://localhost:5601`:
+
+- **Dev Tools** (Management → Dev Tools) để query trực tiếp:
+
+  ```
+  GET product_chunks/_search
+  { "query": { "match_all": {} }, "size": 5 }
+  ```
+
+- **Discover** để xem dạng grid: tạo **Data View** với pattern `product_chunks`,
+  ở bước chọn time field chọn *"I don't want to use the time filter"* (index này
+  không có trường thời gian).
+
+Hoặc gọi thẳng REST API:
+
+```bash
+curl "http://localhost:9200/_cat/indices?v"
+curl "http://localhost:9200/product_chunks/_search?pretty&size=3"
+```
+
+### Postgres — psql
+
+```bash
+# Catalog source-of-truth
+docker compose exec postgres psql -U postgres -d rag_products \
+  -c "SELECT product_id, name, price FROM product_catalog LIMIT 5;"
+
+# Index semantic dẫn xuất (các row chunk + metadata)
+docker compose exec postgres psql -U postgres -d rag_products \
+  -c "SELECT id, metadata->>'chunk_type' AS type FROM products LIMIT 5;"
+```
+
+### Kafka — topic & consumer lag
+
+```bash
+# Liệt kê topic (topic CDC là ragshop.public.product_catalog)
+docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list
+
+# Consumer group (mỗi sync worker một group: rag-sync-indexer, rag-sync-embedder)
+docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 --describe --group rag-sync-embedder
+```
+
+Cột `LAG` trong output `--describe` cho biết worker đang trễ bao nhiêu — đúng
+bằng cửa sổ eventual-consistency giữa lúc ghi catalog và lúc index tìm kiếm bắt
+kịp.
+
+### Debezium — trạng thái connector
+
+```bash
+curl http://localhost:8083/connectors                                   # liệt kê
+curl http://localhost:8083/connectors/product-catalog-connector/status  # trạng thái + task
 ```
 
 ---
 
-## Cách 2 — Image GHCR có sẵn
+## Biến môi trường
 
-Phù hợp nhất cho triển khai hoặc test nhanh mà không cần clone repo. Mỗi lần push lên `main` và mỗi version tag đều tự động build và push image lên GitHub Container Registry.
+Đặt qua `.env` (gốc repo), `--env-file`, hoặc cờ `-e`. Trong full stack Compose,
+các biến hạ tầng đã được đặt sẵn cho bạn.
 
-### Các Tag có sẵn
+| Biến | Bắt buộc | Mô tả |
+| ---- | -------- | ----- |
+| `GEMINI_API_KEY` | Có* | Key Google Gemini — provider mặc định cho **cả** LLM và embedding |
+| `ANTHROPIC_API_KEY` | Không | Chỉ khi `llm_provider: anthropic` trong `configs/settings.yaml` |
+| `OPENAI_API_KEY` | Không | Chỉ khi đổi provider LLM/embedding sang OpenAI |
+| `DATABASE_URL` | Auto | DSN Postgres; Compose đặt thành `postgresql://postgres:postgres@postgres:5432/rag_products` |
+| `ELASTICSEARCH_URL` | Auto | Compose đặt thành `http://elasticsearch:9200` |
+| `KAFKA_BOOTSTRAP_SERVERS` | Auto | Compose đặt thành `kafka:9092` (cho sync worker) |
+| `KEYWORD_BACKEND` | Auto | `elasticsearch` trong Compose; fallback về BM25 in-memory nếu ES không truy cập được |
+| `ENVIRONMENT` | Không | `development` (mặc định) hoặc `production` |
+| `LOG_LEVEL` | Không | `DEBUG`, `INFO` (mặc định), `WARNING`, `ERROR` |
+
+*Bạn chỉ cần key cho provider được chọn trong `configs/settings.yaml` (mặc định
+Gemini). Hỗ trợ nhiều key để xoay vòng (`GEMINI_API_KEY=key_a,key_b`).
+
+## Tham chiếu cổng & volume
+
+| Cổng host | Service | Dùng để |
+| --------- | ------- | ------- |
+| `8000` | app | REST API + Swagger UI |
+| `5601` | kibana | UI Elasticsearch |
+| `9200` | elasticsearch | REST API của ES |
+| `5432` | postgres | Truy cập SQL (psql / DBeaver) |
+| `8083` | connect | REST Kafka Connect / Debezium |
+| `6379` | redis | Cache |
+
+| Volume | Service | Nội dung |
+| ------ | ------- | -------- |
+| `pgdata` | postgres | `product_catalog` + `products`/pgvector |
+| `esdata` | elasticsearch | Index keyword `product_chunks` |
+| `kafkadata` | kafka | Event log + Debezium offset |
+
+---
+
+## Cách 2 — Image dựng sẵn trên GHCR (tối giản)
+
+Phù hợp để triển khai nhanh hoặc thử nghiệm mà không cần clone repo. Mỗi push lên
+`main` và mỗi version tag đều build và push image lên GitHub Container Registry.
+
+!!! warning "Đây là bản triển khai tối giản"
+    Ví dụ dưới chỉ chạy **app + Postgres + Redis** — không có Elasticsearch,
+    Kafka hay Debezium. Ở chế độ này nhánh keyword dùng snapshot BM25 in-memory
+    (dựng lúc khởi động) và **không có CDC**, nên thay đổi catalog chỉ được phản
+    ánh sau khi re-ingest. Muốn hành vi hybrid + đồng bộ thời gian thực đầy đủ,
+    dùng Cách 1.
+
+### Các tag có sẵn
 
 | Tag | Mô tả | Ví dụ |
-| --- | ----------- | ------- |
-| `main` | Commit mới nhất trên branch `main` | `ghcr.io/nxhawk/rag-product-recommend:main` |
-| `v*.*.*` | Bản phát hành theo semantic version | `ghcr.io/nxhawk/rag-product-recommend:v1.0.0` |
+| --- | ----- | ----- |
+| `main` | Commit mới nhất trên `main` | `ghcr.io/nxhawk/rag-product-recommend:main` |
+| `v*.*.*` | Bản release theo semantic version | `ghcr.io/nxhawk/rag-product-recommend:v1.0.0` |
 | `v*.*` | Major.minor (rolling) | `ghcr.io/nxhawk/rag-product-recommend:v1.0` |
-| `<sha>` | SHA commit cụ thể | `ghcr.io/nxhawk/rag-product-recommend:a1b2c3d` |
+| `<sha>` | Commit SHA cụ thể | `ghcr.io/nxhawk/rag-product-recommend:a1b2c3d` |
 
-### Pull & Chạy
+### Pull & chạy
 
 ```bash
-# Pull image mới nhất
 docker pull ghcr.io/nxhawk/rag-product-recommend:main
 
-# Chạy kèm biến môi trường
-docker run -d \
-  --name rag-api \
-  -p 8000:8000 \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e OPENAI_API_KEY=sk-... \
-  -e ENVIRONMENT=production \
-  -v $(pwd)/data:/app/data \
-  ghcr.io/nxhawk/rag-product-recommend:main
-```
-
-### Chạy với file `.env`
-
-```bash
 docker run -d \
   --name rag-api \
   -p 8000:8000 \
@@ -121,13 +330,9 @@ docker run -d \
   ghcr.io/nxhawk/rag-product-recommend:main
 ```
 
-### Chạy kèm Redis (Docker Compose)
-
-Tạo một file `docker-compose.prod.yml`:
+### Compose tối giản (app + Postgres + Redis)
 
 ```yaml
-version: "3.8"
-
 services:
   app:
     image: ghcr.io/nxhawk/rag-product-recommend:main
@@ -137,6 +342,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rag_products
+      KEYWORD_BACKEND: memory   # không có Elasticsearch trong stack tối giản
     volumes:
       - ./data:/app/data
     depends_on:
@@ -173,93 +379,37 @@ volumes:
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml exec app uv run python scripts/ingest.py
 ```
 
 ---
 
-## Biến môi trường
+## Xử lý sự cố
 
-Các biến này cần được thiết lập qua `--env-file`, cờ `-e`, hoặc trong file `.env`:
-
-| Biến | Bắt buộc | Mô tả |
-| -------- | -------- | ----------- |
-| `ANTHROPIC_API_KEY` | Có* | API key của Anthropic Claude |
-| `OPENAI_API_KEY` | Có* | API key của OpenAI (dùng cho embedding) |
-| `GEMINI_API_KEY` | Không | API key của Google Gemini |
-| `DATABASE_URL` | Không | Chuỗi kết nối Postgres (mặc định: `postgresql://postgres:postgres@localhost:5432/rag_products`; Docker Compose tự thiết lập) |
-| `ENVIRONMENT` | Không | `development` (mặc định) hoặc `production` |
-| `LOG_LEVEL` | Không | `DEBUG`, `INFO` (mặc định), `WARNING`, `ERROR` |
-
-*Tối thiểu bạn cần key cho LLM provider đã cấu hình (`ANTHROPIC_API_KEY` theo mặc định) và `OPENAI_API_KEY` cho embedding.
+| Triệu chứng | Nguyên nhân & cách xử lý |
+| ----------- | ------------------------ |
+| `app` trả `503` ở `/api/recommend` | Chưa nạp dữ liệu, hoặc provider API key thiếu/sai. Chạy `ingest.py` và kiểm tra `.env`. |
+| Gợi ý chạy được nhưng kết quả keyword yếu | Elasticsearch không truy cập được → API âm thầm fallback về BM25 in-memory. Xem `docker compose logs elasticsearch` và `curl localhost:9200/_cluster/health`. |
+| `connect-init` thoát mà không đăng ký | `connect` chưa healthy. Chạy lại `docker compose up -d connect-init` và xem `docker compose logs connect`. |
+| Ghi catalog không xuất hiện trong tìm kiếm | Một sync worker chết hoặc đang trễ. Xem `docker compose logs embedding-worker indexer-worker` và cột `LAG` của consumer-group (xem trên). |
+| Container Elasticsearch cứ restart | Thiếu bộ nhớ. Nó bị ghim `-Xms512m -Xmx512m`; cấp thêm RAM cho Docker hoặc giảm `ES_JAVA_OPTS`. |
+| Cổng đã bị chiếm | Tiến trình khác đang giữ `8000/5432/9200/5601/8083/6379`. Dừng nó hoặc đổi mapping `ports:`. |
 
 ---
 
-## Nạp dữ liệu trong Docker
+## Pipeline CI/CD
 
-Container không tự động nạp dữ liệu. Bạn cần chạy ingestion thủ công:
+Image GHCR được build tự động bởi GitHub Actions
+(`.github/workflows/docker.yml`):
 
-```bash
-# Nếu chạy với docker compose
-docker compose exec app uv run python scripts/seed.py
-docker compose exec app uv run python scripts/ingest.py
+1. **Test** — cài deps, chạy `pytest tests/ -v`.
+2. **Build & Push** — chỉ khi test pass; push trên `main` và tag (PR có build nhưng không push).
 
-# Nếu chạy container độc lập
-docker exec rag-api uv run python scripts/seed.py
-docker exec rag-api uv run python scripts/ingest.py
-```
-
-Sau khi ingest, vector được lưu trong Postgres (volume `pgdata`) và vẫn tồn tại qua các lần restart.
-
----
-
-## Health Check
-
-Kiểm tra server đang chạy:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Test một request gợi ý:
-
-```bash
-curl -X POST http://localhost:8000/api/recommend \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Điện thoại chụp ảnh đẹp dưới 15 triệu", "top_k": 3}'
-```
-
----
-
-## Các lệnh hữu ích
-
-```bash
-# Xem log
-docker compose logs -f app
-
-# Vào shell của container
-docker compose exec app bash
-
-# Kiểm tra kích thước image
-docker images ghcr.io/nxhawk/rag-product-recommend
-
-# Xóa image cũ
-docker image prune -f
-```
-
----
-
-## CI/CD Pipeline
-
-Image GHCR được build tự động bởi GitHub Actions (`.github/workflows/docker.yml`):
-
-1. **Test** — cài dependency, chạy `pytest tests/ -v`
-2. **Build & Push** — chỉ khi test pass; chỉ push trên branch `main` và tag (PR chỉ build, không push)
-
-Để kích hoạt một bản phát hành có version, tạo git tag:
+Để kích hoạt một bản release có version, tạo git tag:
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-Lệnh này tạo ra các image được gắn tag `v1.0.0`, `v1.0`, và commit SHA.
+Lệnh này tạo image tag `v1.0.0`, `v1.0`, và commit SHA.

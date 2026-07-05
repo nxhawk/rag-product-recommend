@@ -120,6 +120,7 @@ nav:
       - Schemas: api/schemas.md
   - Deployment:
       - Docker: deployment/docker.md
+      - Kibana: deployment/kibana.md
       - CI/CD: deployment/ci-cd.md
   - Development:
       - Contributing: development/contributing.md

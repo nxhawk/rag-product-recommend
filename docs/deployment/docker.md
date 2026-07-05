@@ -1,118 +1,329 @@
 # Docker Deployment
 
-This guide covers two ways to run the project with Docker: building locally with Docker Compose, or pulling the pre-built image from GitHub Container Registry (GHCR).
+The repository ships a full **Docker Compose** stack that runs the entire CDC
+architecture with a single command: the API, both datastores (Postgres +
+pgvector and Elasticsearch), the Kafka + Debezium change-data-capture pipeline,
+the two sync workers, Redis, and **Kibana** for inspecting Elasticsearch.
 
-## Option 1 — Docker Compose (Local Build)
+There are two ways to run the project:
 
-Best for local development. Builds the image from source and starts the API server with Postgres (pgvector) and Redis.
+- **Option 1 — Docker Compose (full stack)** — recommended for local development. Everything is wired together, so product writes flow through CDC to both search indexes automatically.
+- **Option 2 — Pre-built GHCR image (minimal)** — a lightweight API + Postgres + Redis deployment without Elasticsearch/Kafka (keyword search falls back to the in-memory BM25 index).
+
+## Stack Architecture
+
+The Compose stack is the reference implementation of the system's
+[data flow](../architecture/data-flow.md): the `product_catalog` table is the
+single source of truth, and every write is propagated to the two derived search
+indexes by the CDC pipeline.
+
+```mermaid
+flowchart LR
+    U["localhost:8000\nAPI"] --> APP["app\n(FastAPI)"]
+    KB["localhost:5601\nKibana"] --> ES
+
+    APP -->|"CRUD write"| PG[("postgres\nproduct_catalog + products/pgvector")]
+    APP -->|"semantic search"| PG
+    APP -->|"keyword search"| ES[("elasticsearch\nproduct_chunks")]
+    APP -.->|"cache"| RD["redis"]
+
+    PG -->|"WAL (logical)"| CN["connect\n(Debezium)"]
+    CN -->|"change events"| KF["kafka\nragshop.public.product_catalog"]
+    KF --> IW["indexer-worker"]
+    KF --> EW["embedding-worker"]
+    IW --> ES
+    EW --> PG
+```
+
+`postgres` plays two roles: it holds the `product_catalog` table (the CDC
+**source**) and the `products` + pgvector table (the semantic index, a CDC
+**sink**). Debezium only captures `product_catalog`, so the embedding worker
+writing vectors back into `products` never creates a feedback loop.
+
+---
+
+## Option 1 — Docker Compose (Full Stack)
 
 ### Prerequisites
 
 - Docker Engine 20.10+
-- Docker Compose v2
+- Docker Compose v2 (`docker compose`, not the legacy `docker-compose`)
+- ~4 GB of free RAM (Elasticsearch, Kafka and Postgres together are memory-hungry)
+- An API key for the configured provider (Gemini by default)
 
-### Run
+### 1. Configure environment
+
+Create a `.env` file at the **repository root** (there is no committed
+`.env.example`). The `app` and `embedding-worker` services read it via
+`env_file: ../.env`:
+
+```dotenv
+# Default provider is Gemini (used for both LLM and embeddings)
+GEMINI_API_KEY=AIza...
+
+# Optional — only if you switch providers in configs/settings.yaml
+# ANTHROPIC_API_KEY=sk-ant-...
+# OPENAI_API_KEY=sk-...
+```
+
+The Compose file injects the infra connection variables (`DATABASE_URL`,
+`ELASTICSEARCH_URL`, `KAFKA_BOOTSTRAP_SERVERS`, `KEYWORD_BACKEND`) automatically
+— you do **not** put those in `.env`.
+
+### 2. Start the stack
 
 ```bash
-# 1. Configure environment variables
-cp .env.example .env
-# Edit .env with your API keys
-
-# 2. Start all services
 cd docker
-docker compose up --build
+docker compose up --build -d
 ```
 
-This starts the full CDC stack:
+On the first run this builds the app image and pulls the Elasticsearch, Kafka,
+Kibana and Debezium images (a few GB), so allow 1–2 minutes. Compose gates
+startup on health checks (see below), and `connect-init` registers the Debezium
+connector once everything is ready.
 
-| Service | Port | Description |
-| ------- | ---- | ----------- |
-| **app** | `8000` | FastAPI server (keyword backend: Elasticsearch) |
-| **postgres** | `5432` | Postgres + pgvector — catalog (source of truth) + vectors; `wal_level=logical` for CDC |
-| **elasticsearch** | `9200` | Keyword/BM25 index (`product_chunks`) |
-| **kafka** | — | Event stream (single-node KRaft) |
-| **connect** | `8083` | Debezium (Kafka Connect) — captures `product_catalog` changes |
-| **connect-init** | — | One-shot: registers the Debezium connector (`docker/debezium/`), then exits |
-| **indexer-worker** | — | CDC consumer → Elasticsearch |
-| **embedding-worker** | — | CDC consumer → pgvector (re-embeds only on text changes) |
-| **redis** | `6379` | Redis cache |
+### Services
 
-Product create/update/delete via `POST/PUT/DELETE /api/products` propagates
-to both search indexes automatically (see
-[Hybrid Retrieval](../architecture/hybrid-retrieval.md#cdc-architecture-how-the-indexes-stay-fresh)).
+| Service | Image | Host port | Depends on (healthy) | Role |
+| ------- | ----- | --------- | -------------------- | ---- |
+| **app** | built from `docker/Dockerfile` | `8000` | postgres, elasticsearch, redis | FastAPI server; `KEYWORD_BACKEND=elasticsearch` |
+| **postgres** | `pgvector/pgvector:pg16` | `5432` | — | Catalog (source of truth) + pgvector; started with `wal_level=logical` for CDC |
+| **elasticsearch** | `docker.elastic.co/elasticsearch/elasticsearch:8.14.3` | `9200` | — | Keyword/BM25 index `product_chunks` (security disabled, single-node) |
+| **kibana** | `docker.elastic.co/kibana/kibana:8.14.3` | `5601` | elasticsearch | Web UI to browse/query Elasticsearch |
+| **kafka** | `apache/kafka:3.7.2` | — (internal `9092`) | — | Event stream, single-node KRaft (no ZooKeeper) |
+| **connect** | `debezium/connect:2.7.3.Final` | `8083` | kafka, postgres | Kafka Connect running the Debezium Postgres connector |
+| **connect-init** | `curlimages/curl:8.8.0` | — | connect | One-shot: `PUT`s the connector config from `docker/debezium/`, then exits |
+| **indexer-worker** | built from `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch |
+| **embedding-worker** | built from `docker/Dockerfile` | — | kafka, postgres | `sync_worker.py --role embedder` → pgvector (re-embeds only on text change) |
+| **redis** | `redis:7-alpine` | `6379` | — | Cache service |
 
-The API is available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
+### Startup order & health gating
 
-### Stop
+Compose does not start a service until its dependencies report **healthy**:
+
+- `postgres`, `elasticsearch` and `kafka` expose health checks; everything that talks to them waits (`depends_on: condition: service_healthy`).
+- `connect-init` waits for `connect` to be healthy, `PUT`s
+  `docker/debezium/product-catalog-connector.json` to
+  `http://connect:8083/connectors/product-catalog-connector/config`
+  (idempotent — safe on every `up`), prints a confirmation, and exits with `restart: "no"`.
+- `indexer-worker` and `embedding-worker` run with `restart: unless-stopped`; on their first start they consume the Debezium **initial snapshot** (`auto.offset.reset=earliest`), which is how a fresh index gets bootstrapped.
+- `app` depends only on `postgres`, `elasticsearch` and `redis` — not on Kafka/Connect — so the API can serve reads while the CDC pipeline is still warming up.
+
+### 3. Load data (first time)
+
+The stack does **not** auto-ingest. Seed the catalog and indexes once the
+services are up:
 
 ```bash
-docker compose down
-
-# Remove volumes too (deletes cached data)
-docker compose down -v
-```
-
-### Rebuild After Code Changes
-
-```bash
-docker compose up --build
-```
-
-Docker layer caching means only changed layers rebuild. Dependency changes (editing `pyproject.toml`) trigger a full reinstall; code-only changes are fast.
-
-### Data Persistence
-
-Vectors live in Postgres, persisted in the named volume `pgdata`. The `data/` directory is still mounted for raw product data:
-
-```yaml
-volumes:
-  - ../data:/app/data   # raw data (app service)
-  - pgdata:/var/lib/postgresql/data   # vectors (postgres service)
-```
-
-If you need a clean vector store, drop the volume and re-run ingestion:
-
-```bash
-docker compose down -v   # removes pgdata
-docker compose up -d
+# Writes all three targets: product_catalog + pgvector + Elasticsearch
 docker compose exec app uv run python scripts/ingest.py
+
+# Alternative: write only the source-of-truth catalog and let the CDC
+# workers build both indexes from the Debezium snapshot
+docker compose exec app uv run python scripts/ingest.py --catalog-only
+```
+
+After this, ongoing writes via `POST/PUT/DELETE /api/products` propagate to both
+indexes automatically through CDC — see
+[Hybrid Retrieval](../architecture/hybrid-retrieval.md#cdc-architecture-how-the-indexes-stay-fresh)
+and [sync_worker.py](../scripts/sync-worker.md).
+
+### 4. Verify everything is wired
+
+```bash
+# API up?
+curl http://localhost:8000/health
+
+# A recommendation (needs data ingested + provider key)
+curl -X POST http://localhost:8000/api/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Điện thoại chụp ảnh đẹp dưới 15 triệu", "top_k": 3}'
+
+# Debezium connector registered & running?
+curl http://localhost:8083/connectors/product-catalog-connector/status
+
+# Elasticsearch keyword index populated?
+curl "http://localhost:9200/product_chunks/_count?pretty"
+```
+
+The API is at `http://localhost:8000` (interactive docs at
+`http://localhost:8000/docs`); Kibana is at `http://localhost:5601`.
+
+---
+
+## Managing the Stack
+
+### Start / stop subsets
+
+```bash
+docker compose up -d postgres elasticsearch kafka   # just the infra
+docker compose up -d kibana                          # add Kibana later
+docker compose stop indexer-worker embedding-worker  # pause the CDC workers
+docker compose restart connect-init                  # re-register the connector
+```
+
+### Logs
+
+```bash
+docker compose logs -f app                # API
+docker compose logs -f embedding-worker   # CDC → pgvector
+docker compose logs -f indexer-worker     # CDC → Elasticsearch
+docker compose logs -f connect            # Debezium
+docker compose logs connect-init          # connector registration result
+```
+
+### Rebuild after code changes
+
+```bash
+docker compose up --build -d
+```
+
+Docker layer caching means only changed layers rebuild. Editing `pyproject.toml`
+triggers a full dependency reinstall; code-only changes are fast.
+
+### Stop & reset
+
+```bash
+docker compose down          # stop, keep data volumes
+docker compose down -v       # also delete volumes (pgdata, esdata, kafkadata)
+```
+
+Removing volumes wipes the catalog, vectors, Elasticsearch index **and** the
+Kafka log (including Debezium offsets), so the next `up` + `ingest` starts
+completely clean.
+
+---
+
+## Inspecting the Data
+
+### Elasticsearch — Kibana
+
+For a full walkthrough (Dev Tools queries, Discover data views, KQL filters,
+field reference), see **[Viewing Data in Kibana](kibana.md)**. Quick version —
+open `http://localhost:5601`:
+
+- **Dev Tools** (Management → Dev Tools) for raw queries:
+
+  ```
+  GET product_chunks/_search
+  { "query": { "match_all": {} }, "size": 5 }
+  ```
+
+- **Discover** for a grid view: create a **Data View** with the index pattern
+  `product_chunks`, and at the time-field step choose *"I don't want to use the
+  time filter"* (the index has no timestamp field).
+
+Or hit the REST API directly:
+
+```bash
+curl "http://localhost:9200/_cat/indices?v"
+curl "http://localhost:9200/product_chunks/_search?pretty&size=3"
+```
+
+### Postgres — psql
+
+```bash
+# Source-of-truth catalog
+docker compose exec postgres psql -U postgres -d rag_products \
+  -c "SELECT product_id, name, price FROM product_catalog LIMIT 5;"
+
+# Derived semantic index (chunk rows + metadata)
+docker compose exec postgres psql -U postgres -d rag_products \
+  -c "SELECT id, metadata->>'chunk_type' AS type FROM products LIMIT 5;"
+```
+
+### Kafka — topics & consumer lag
+
+```bash
+# List topics (the CDC topic is ragshop.public.product_catalog)
+docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list
+
+# Consumer groups (one per sync worker: rag-sync-indexer, rag-sync-embedder)
+docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 --describe --group rag-sync-embedder
+```
+
+The `--describe` output's `LAG` column shows how far behind a worker is — that
+lag is exactly the eventual-consistency window between a catalog write and the
+search index catching up.
+
+### Debezium — connector status
+
+```bash
+curl http://localhost:8083/connectors                                   # list
+curl http://localhost:8083/connectors/product-catalog-connector/status  # state + tasks
 ```
 
 ---
 
-## Option 2 — Pre-Built GHCR Image
+## Environment Variables
 
-Best for deployment or quick testing without cloning the repo. Every push to `main` and every version tag automatically builds and pushes an image to GitHub Container Registry.
+Set these via `.env` (repo root), `--env-file`, or `-e` flags. In the full
+Compose stack the infra variables are set for you.
 
-### Available Tags
+| Variable | Required | Description |
+| -------- | -------- | ----------- |
+| `GEMINI_API_KEY` | Yes* | Google Gemini key — default provider for **both** LLM and embeddings |
+| `ANTHROPIC_API_KEY` | No | Only if `llm_provider: anthropic` in `configs/settings.yaml` |
+| `OPENAI_API_KEY` | No | Only if you switch the LLM/embedding provider to OpenAI |
+| `DATABASE_URL` | Auto | Postgres DSN; set by Compose to `postgresql://postgres:postgres@postgres:5432/rag_products` |
+| `ELASTICSEARCH_URL` | Auto | Set by Compose to `http://elasticsearch:9200` |
+| `KAFKA_BOOTSTRAP_SERVERS` | Auto | Set by Compose to `kafka:9092` (for the sync workers) |
+| `KEYWORD_BACKEND` | Auto | `elasticsearch` in Compose; falls back to in-memory BM25 if ES is unreachable |
+| `ENVIRONMENT` | No | `development` (default) or `production` |
+| `LOG_LEVEL` | No | `DEBUG`, `INFO` (default), `WARNING`, `ERROR` |
+
+*You only need the key for the provider selected in `configs/settings.yaml`
+(Gemini by default). Multiple keys are supported for rotation
+(`GEMINI_API_KEY=key_a,key_b`).
+
+## Ports & Volumes Reference
+
+| Host port | Service | Use |
+| --------- | ------- | --- |
+| `8000` | app | REST API + Swagger UI |
+| `5601` | kibana | Elasticsearch UI |
+| `9200` | elasticsearch | ES REST API |
+| `5432` | postgres | SQL access (psql / DBeaver) |
+| `8083` | connect | Kafka Connect / Debezium REST |
+| `6379` | redis | Cache |
+
+| Volume | Service | Contents |
+| ------ | ------- | -------- |
+| `pgdata` | postgres | `product_catalog` + `products`/pgvector |
+| `esdata` | elasticsearch | `product_chunks` keyword index |
+| `kafkadata` | kafka | Event log + Debezium offsets |
+
+---
+
+## Option 2 — Pre-Built GHCR Image (Minimal)
+
+Best for a quick deployment or testing without cloning the repo. Every push to
+`main` and every version tag builds and pushes an image to GitHub Container
+Registry.
+
+!!! warning "This is a minimal deployment"
+    The example below runs only **app + Postgres + Redis** — no Elasticsearch,
+    Kafka or Debezium. In that mode the keyword branch uses the in-memory BM25
+    snapshot (built at startup) and there is **no CDC**, so catalog writes are
+    reflected only after a re-ingest. For the full hybrid + real-time-sync
+    behaviour, use Option 1.
+
+### Available tags
 
 | Tag | Description | Example |
 | --- | ----------- | ------- |
-| `main` | Latest commit on `main` branch | `ghcr.io/nxhawk/rag-product-recommend:main` |
+| `main` | Latest commit on `main` | `ghcr.io/nxhawk/rag-product-recommend:main` |
 | `v*.*.*` | Semantic version release | `ghcr.io/nxhawk/rag-product-recommend:v1.0.0` |
 | `v*.*` | Major.minor (rolling) | `ghcr.io/nxhawk/rag-product-recommend:v1.0` |
 | `<sha>` | Specific commit SHA | `ghcr.io/nxhawk/rag-product-recommend:a1b2c3d` |
 
-### Pull & Run
+### Pull & run
 
 ```bash
-# Pull the latest image
 docker pull ghcr.io/nxhawk/rag-product-recommend:main
 
-# Run with environment variables
-docker run -d \
-  --name rag-api \
-  -p 8000:8000 \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e OPENAI_API_KEY=sk-... \
-  -e ENVIRONMENT=production \
-  -v $(pwd)/data:/app/data \
-  ghcr.io/nxhawk/rag-product-recommend:main
-```
-
-### Run with `.env` File
-
-```bash
 docker run -d \
   --name rag-api \
   -p 8000:8000 \
@@ -121,13 +332,9 @@ docker run -d \
   ghcr.io/nxhawk/rag-product-recommend:main
 ```
 
-### Run with Redis (Docker Compose)
-
-Create a `docker-compose.prod.yml`:
+### Minimal Compose (app + Postgres + Redis)
 
 ```yaml
-version: "3.8"
-
 services:
   app:
     image: ghcr.io/nxhawk/rag-product-recommend:main
@@ -137,6 +344,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rag_products
+      KEYWORD_BACKEND: memory   # no Elasticsearch in this minimal stack
     volumes:
       - ./data:/app/data
     depends_on:
@@ -173,88 +381,31 @@ volumes:
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml exec app uv run python scripts/ingest.py
 ```
 
 ---
 
-## Environment Variables
+## Troubleshooting
 
-These variables must be set either via `--env-file`, `-e` flags, or in the `.env` file:
-
-| Variable | Required | Description |
-| -------- | -------- | ----------- |
-| `ANTHROPIC_API_KEY` | Yes* | Anthropic Claude API key |
-| `OPENAI_API_KEY` | Yes* | OpenAI API key (used for embeddings) |
-| `GEMINI_API_KEY` | No | Google Gemini API key |
-| `DATABASE_URL` | No | Postgres connection string (default: `postgresql://postgres:postgres@localhost:5432/rag_products`; set automatically by Docker Compose) |
-| `ENVIRONMENT` | No | `development` (default) or `production` |
-| `LOG_LEVEL` | No | `DEBUG`, `INFO` (default), `WARNING`, `ERROR` |
-
-*At minimum you need the key for the configured LLM provider (`ANTHROPIC_API_KEY` by default) and `OPENAI_API_KEY` for embeddings.
-
----
-
-## Data Ingestion in Docker
-
-The container does not auto-ingest data. You need to run ingestion manually:
-
-```bash
-# If running with docker compose
-docker compose exec app uv run python scripts/seed.py
-docker compose exec app uv run python scripts/ingest.py
-# or: ingest.py --catalog-only  (let the CDC workers build the indexes)
-
-# If running standalone container
-docker exec rag-api uv run python scripts/seed.py
-docker exec rag-api uv run python scripts/ingest.py
-```
-
-After ingestion, vectors are stored in Postgres (the `pgdata` volume) and persist across restarts.
-
----
-
-## Health Check
-
-Verify the server is running:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Test a recommendation request:
-
-```bash
-curl -X POST http://localhost:8000/api/recommend \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Điện thoại chụp ảnh đẹp dưới 15 triệu", "top_k": 3}'
-```
-
----
-
-## Useful Commands
-
-```bash
-# View logs
-docker compose logs -f app
-
-# Shell into the container
-docker compose exec app bash
-
-# Check image size
-docker images ghcr.io/nxhawk/rag-product-recommend
-
-# Remove old images
-docker image prune -f
-```
+| Symptom | Likely cause & fix |
+| ------- | ------------------ |
+| `app` returns `503` on `/api/recommend` | No data ingested yet, or the provider API key is missing/invalid. Run `ingest.py` and check `.env`. |
+| Recommendations work but keyword hits look weak | Elasticsearch unreachable → the API silently fell back to in-memory BM25. Check `docker compose logs elasticsearch` and `curl localhost:9200/_cluster/health`. |
+| `connect-init` exits without registering | `connect` wasn't healthy yet. Re-run `docker compose up -d connect-init` and check `docker compose logs connect`. |
+| Catalog writes don't appear in search | A sync worker is down or lagging. Check `docker compose logs embedding-worker indexer-worker` and the consumer-group `LAG` (see above). |
+| Elasticsearch container keeps restarting | Not enough memory. It's pinned to `-Xms512m -Xmx512m`; give Docker more RAM or lower `ES_JAVA_OPTS`. |
+| Port already in use | Another process holds `8000/5432/9200/5601/8083/6379`. Stop it or remap the `ports:` entry. |
 
 ---
 
 ## CI/CD Pipeline
 
-The GHCR image is built automatically by GitHub Actions (`.github/workflows/docker.yml`):
+The GHCR image is built automatically by GitHub Actions
+(`.github/workflows/docker.yml`):
 
-1. **Test** — installs deps, runs `pytest tests/ -v`
-2. **Build & Push** — only if tests pass; only pushes on `main` branch and tags (PRs build but don't push)
+1. **Test** — installs deps, runs `pytest tests/ -v`.
+2. **Build & Push** — only if tests pass; pushes on `main` and tags (PRs build but don't push).
 
 To trigger a versioned release, create a git tag:
 
