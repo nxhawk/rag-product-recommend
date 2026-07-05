@@ -193,7 +193,11 @@ uv run python scripts/sync_worker.py --role embedder   # -> pgvector
 ```
 
 Monitoring: check consumer-group **lag** and the Debezium **connector status**
+<<<<<<< HEAD
 — see [Docker › Kafka & Debezium](../deployment/docker.md#kafka-topics-consumer-lag).
+=======
+— see [Docker › Kafka & Debezium](docker.md#kafka-topics-consumer-lag).
+>>>>>>> a4e5e36465dd7e78e6322e942436bba2c855ea6d
 
 ## Failure modes & recovery
 
