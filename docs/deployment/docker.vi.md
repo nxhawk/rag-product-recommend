@@ -125,7 +125,7 @@ docker compose exec app uv run python scripts/ingest.py --catalog-only
 
 Sau đó, các thay đổi qua `POST/PUT/DELETE /api/products` sẽ tự lan truyền tới cả
 hai index qua CDC — xem
-[Truy xuất lai](../architecture/hybrid-retrieval.vi.md#cdc-architecture-how-the-indexes-stay-fresh)
+[Truy xuất lai](../architecture/hybrid-retrieval.vi.md)
 và [sync_worker.py](../scripts/sync-worker.vi.md).
 
 ### 4. Kiểm tra mọi thứ đã nối đúng
