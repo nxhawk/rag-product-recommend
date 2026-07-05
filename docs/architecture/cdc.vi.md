@@ -191,11 +191,7 @@ uv run python scripts/sync_worker.py --role embedder   # -> pgvector
 ```
 
 Giám sát: xem **lag** của consumer-group và **trạng thái connector** Debezium —
-<<<<<<< HEAD
 xem [Docker › Kafka & Debezium](../deployment/docker.vi.md#kafka-topic-consumer-lag).
-=======
-xem [Docker › Kafka & Debezium](docker.vi.md#kafka-topic-consumer-lag).
->>>>>>> a4e5e36465dd7e78e6322e942436bba2c855ea6d
 
 ## Các tình huống lỗi & phục hồi
 
@@ -211,9 +207,5 @@ xem [Docker › Kafka & Debezium](docker.vi.md#kafka-topic-consumer-lag).
 
 - [Luồng ghi](write-path.vi.md) — nửa đồng bộ (CRUD + ingest).
 - [sync_worker.py](../scripts/sync-worker.vi.md) — tham chiếu execution-flow cho entry point.
-<<<<<<< HEAD
 - [Luồng dữ liệu](data-flow.vi.md) — cùng pipeline nhìn từ góc dạng dữ liệu.
-=======
-- [Luồng dữ liệu](data-flow.vi.md#continuous-product-write-data-flow-cdc) — cùng pipeline nhìn từ góc dạng dữ liệu.
->>>>>>> a4e5e36465dd7e78e6322e942436bba2c855ea6d
 - [Truy xuất lai](hybrid-retrieval.vi.md) — cách các index mới được dùng lúc query.
