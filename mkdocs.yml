@@ -123,6 +123,7 @@ nav:
   - Deployment:
       - Docker: deployment/docker.md
       - Kibana: deployment/kibana.md
+      - Kafka UI: deployment/kafka-ui.md
       - CI/CD: deployment/ci-cd.md
   - Development:
       - Contributing: development/contributing.md

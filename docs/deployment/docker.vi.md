@@ -3,7 +3,8 @@
 Repository cung cấp một stack **Docker Compose** đầy đủ, chạy toàn bộ kiến trúc
 CDC chỉ với một lệnh: API, cả hai datastore (Postgres + pgvector và
 Elasticsearch), pipeline change-data-capture Kafka + Debezium, hai sync worker,
-Redis, và **Kibana** để xem dữ liệu Elasticsearch.
+Redis, **Kibana** để xem dữ liệu Elasticsearch, và **Kafka UI** để xem các topic
+Kafka và Debezium connector.
 
 Có hai cách chạy dự án:
 
@@ -21,6 +22,8 @@ CDC lan truyền tới hai index tìm kiếm dẫn xuất.
 flowchart LR
     U["localhost:8000\nAPI"] --> APP["app\n(FastAPI)"]
     KB["localhost:5601\nKibana"] --> ES
+    KUI["localhost:8080\nKafka UI"] --> KF
+    KUI --> CN
 
     APP -->|"ghi CRUD"| PG[("postgres\nproduct_catalog + products/pgvector")]
     APP -->|"semantic search"| PG
@@ -78,7 +81,7 @@ docker compose up --build -d
 ```
 
 Lần chạy đầu sẽ build image app và pull các image Elasticsearch, Kafka, Kibana,
-Debezium (vài GB), nên hãy đợi 1–2 phút. Compose chặn khởi động theo health
+Kafka UI, Debezium (vài GB), nên hãy đợi 1–2 phút. Compose chặn khởi động theo health
 check (xem bên dưới), và `connect-init` đăng ký Debezium connector khi mọi thứ
 đã sẵn sàng.
 
@@ -91,6 +94,7 @@ check (xem bên dưới), và `connect-init` đăng ký Debezium connector khi m
 | **elasticsearch** | `docker.elastic.co/elasticsearch/elasticsearch:8.14.3` | `9200` | — | Index keyword/BM25 `product_chunks` (đã tắt security, single-node) |
 | **kibana** | `docker.elastic.co/kibana/kibana:8.14.3` | `5601` | elasticsearch | Web UI để xem/query Elasticsearch |
 | **kafka** | `apache/kafka:3.7.2` | — (`9092` nội bộ) | — | Event stream, single-node KRaft (không ZooKeeper) |
+| **kafka-ui** | `kafbat/kafka-ui:v1.4.2` | `8080` | kafka, connect | Web UI xem topic/message Kafka, consumer lag và Debezium connector |
 | **connect** | `debezium/connect:2.7.3.Final` | `8083` | kafka, postgres | Kafka Connect chạy Debezium Postgres connector |
 | **connect-init** | `curlimages/curl:8.8.0` | — | connect | One-shot: `PUT` cấu hình connector từ `docker/debezium/` rồi thoát |
 | **indexer-worker** | build từ `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch |
@@ -147,7 +151,7 @@ curl "http://localhost:9200/product_chunks/_count?pretty"
 ```
 
 API ở `http://localhost:8000` (docs tương tác ở `http://localhost:8000/docs`);
-Kibana ở `http://localhost:5601`.
+Kibana ở `http://localhost:5601`; Kafka UI ở `http://localhost:8080`.
 
 ---
 
@@ -158,6 +162,7 @@ Kibana ở `http://localhost:5601`.
 ```bash
 docker compose up -d postgres elasticsearch kafka   # chỉ hạ tầng
 docker compose up -d kibana                          # thêm Kibana sau
+docker compose up -d kafka-ui                         # thêm Kafka UI sau
 docker compose stop indexer-worker embedding-worker  # tạm dừng CDC worker
 docker compose restart connect-init                  # đăng ký lại connector
 ```
@@ -191,6 +196,42 @@ docker compose down -v       # xóa luôn volume (pgdata, esdata, kafkadata)
 
 Xóa volume sẽ wipe catalog, vector, index Elasticsearch **và** log Kafka (gồm cả
 Debezium offset), nên lần `up` + `ingest` kế tiếp bắt đầu hoàn toàn sạch.
+
+### Xóa dữ liệu & nạp lại (giữ nguyên stack)
+
+Muốn wipe dữ liệu sản phẩm và làm lại từ đầu **mà không** tắt container (và không
+mất log Kafka), hãy làm rỗng cả ba data store rồi chạy lại `ingest.py`. Ba store
+gồm: catalog nguồn (`product_catalog`), bảng pgvector dẫn xuất (`products`), và
+index keyword Elasticsearch (`product_chunks`):
+
+```bash
+# 1. Postgres — làm rỗng cả catalog nguồn LẪN bảng pgvector dẫn xuất
+docker compose exec postgres psql -U postgres -d rag_products \
+  -c "TRUNCATE product_catalog, products;"
+
+# 2. Elasticsearch — xóa index keyword (báo 404 cũng không sao nếu index đã bị xóa)
+curl -X DELETE "http://localhost:9200/product_chunks"
+
+# 3. Nạp lại — ghi thẳng cả ba đích (catalog + pgvector + ES)
+docker compose exec app uv run python scripts/ingest.py
+```
+
+`ingest.py` tự tạo lại index và cả hai bảng khi cần (`CREATE … IF NOT EXISTS`),
+nên truncate/xóa trước là an toàn. Vì nó ghi thẳng vào pgvector và Elasticsearch,
+bạn **không** phải đợi CDC worker dựng lại — các row catalog vừa chèn lại vẫn chảy
+qua Debezium, nhưng embedding worker bỏ qua re-embedding nhờ `content_hash` của
+từng chunk.
+
+!!! warning "TRUNCATE không được CDC lan truyền — hãy tự xóa index"
+    Sync worker chỉ áp dụng event mức row `c`/`u`/`d`/`r`; event **TRUNCATE** của
+    Debezium bị bỏ qua. Nên chỉ truncate `product_catalog` sẽ **không** xóa
+    `products` / `product_chunks` — bạn phải tự làm rỗng hai store đó (bước 1–2).
+    Nếu muốn để CDC tự xóa giúp, hãy chạy `DELETE FROM product_catalog;` (không
+    phải `TRUNCATE`): mỗi row phát ra một event `d` mà worker tự lan truyền tới cả
+    hai index (chậm hơn nếu catalog lớn, và cần worker đang chạy).
+
+Muốn *sạch hoàn toàn* — gồm cả log Kafka và Debezium offset — dùng
+`docker compose down -v` (ở trên) rồi `up` + `ingest`.
 
 ---
 
@@ -232,7 +273,16 @@ docker compose exec postgres psql -U postgres -d rag_products \
   -c "SELECT id, metadata->>'chunk_type' AS type FROM products LIMIT 5;"
 ```
 
+### Kafka — Kafka UI
+
+Muốn xem topic, message trực tiếp, consumer-group lag và Debezium connector theo
+kiểu bấm-chuột, mở **[Kafka UI](kafka-ui.vi.md)** ở `http://localhost:8080` (không
+cần đăng nhập). Đây là "Kibana cho Kafka" trong stack này — xem trang riêng để có
+hướng dẫn chi tiết.
+
 ### Kafka — topic & consumer lag
+
+Cùng thông tin đó cũng lấy được từ CLI:
 
 ```bash
 # Liệt kê topic (topic CDC là ragshop.public.product_catalog)
@@ -283,6 +333,7 @@ Gemini). Hỗ trợ nhiều key để xoay vòng (`GEMINI_API_KEY=key_a,key_b`).
 | --------- | ------- | ------- |
 | `8000` | app | REST API + Swagger UI |
 | `5601` | kibana | UI Elasticsearch |
+| `8080` | kafka-ui | Kafka UI (topic, message, consumer lag, connector) |
 | `9200` | elasticsearch | REST API của ES |
 | `5432` | postgres | Truy cập SQL (psql / DBeaver) |
 | `8083` | connect | REST Kafka Connect / Debezium |
@@ -393,7 +444,8 @@ docker compose -f docker-compose.prod.yml exec app uv run python scripts/ingest.
 | `connect-init` thoát mà không đăng ký | `connect` chưa healthy. Chạy lại `docker compose up -d connect-init` và xem `docker compose logs connect`. |
 | Ghi catalog không xuất hiện trong tìm kiếm | Một sync worker chết hoặc đang trễ. Xem `docker compose logs embedding-worker indexer-worker` và cột `LAG` của consumer-group (xem trên). |
 | Container Elasticsearch cứ restart | Thiếu bộ nhớ. Nó bị ghim `-Xms512m -Xmx512m`; cấp thêm RAM cho Docker hoặc giảm `ES_JAVA_OPTS`. |
-| Cổng đã bị chiếm | Tiến trình khác đang giữ `8000/5432/9200/5601/8083/6379`. Dừng nó hoặc đổi mapping `ports:`. |
+| Kafka UI không thấy cluster / báo "offline" | Broker chưa sẵn sàng lúc khởi động, hoặc `KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS` sai. Xem `docker compose logs kafka-ui` và kiểm tra `kafka` đã healthy chưa. |
+| Cổng đã bị chiếm | Tiến trình khác đang giữ `8000/5432/9200/5601/8080/8083/6379`. Dừng nó hoặc đổi mapping `ports:`. |
 
 ---
 

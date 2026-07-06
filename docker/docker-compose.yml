@@ -160,6 +160,32 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Kafka UI - web dashboard to browse topics, messages, consumer lag and the
+  # Debezium connector. Pointed at the broker and Kafka Connect. Open
+  # http://localhost:8080 (no login - dev stack). Read-only for the data itself:
+  # the CDC topics are rebuilt from Postgres, so inspect here, don't hand-produce.
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.4.2
+    ports:
+      - "8080:8080"
+    environment:
+      DYNAMIC_CONFIG_ENABLED: "true"
+      KAFKA_CLUSTERS_0_NAME: rag
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      # Surface the Debezium connector under the same cluster view.
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: debezium
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://connect:8083
+    depends_on:
+      kafka:
+        condition: service_healthy
+      connect:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   indexer-worker:
     build:
       context: ..

@@ -3,7 +3,8 @@
 The repository ships a full **Docker Compose** stack that runs the entire CDC
 architecture with a single command: the API, both datastores (Postgres +
 pgvector and Elasticsearch), the Kafka + Debezium change-data-capture pipeline,
-the two sync workers, Redis, and **Kibana** for inspecting Elasticsearch.
+the two sync workers, Redis, **Kibana** for inspecting Elasticsearch, and
+**Kafka UI** for inspecting the Kafka topics and Debezium connector.
 
 There are two ways to run the project:
 
@@ -21,6 +22,8 @@ indexes by the CDC pipeline.
 flowchart LR
     U["localhost:8000\nAPI"] --> APP["app\n(FastAPI)"]
     KB["localhost:5601\nKibana"] --> ES
+    KUI["localhost:8080\nKafka UI"] --> KF
+    KUI --> CN
 
     APP -->|"CRUD write"| PG[("postgres\nproduct_catalog + products/pgvector")]
     APP -->|"semantic search"| PG
@@ -78,7 +81,7 @@ docker compose up --build -d
 ```
 
 On the first run this builds the app image and pulls the Elasticsearch, Kafka,
-Kibana and Debezium images (a few GB), so allow 1–2 minutes. Compose gates
+Kibana, Kafka UI and Debezium images (a few GB), so allow 1–2 minutes. Compose gates
 startup on health checks (see below), and `connect-init` registers the Debezium
 connector once everything is ready.
 
@@ -91,6 +94,7 @@ connector once everything is ready.
 | **elasticsearch** | `docker.elastic.co/elasticsearch/elasticsearch:8.14.3` | `9200` | — | Keyword/BM25 index `product_chunks` (security disabled, single-node) |
 | **kibana** | `docker.elastic.co/kibana/kibana:8.14.3` | `5601` | elasticsearch | Web UI to browse/query Elasticsearch |
 | **kafka** | `apache/kafka:3.7.2` | — (internal `9092`) | — | Event stream, single-node KRaft (no ZooKeeper) |
+| **kafka-ui** | `kafbat/kafka-ui:v1.4.2` | `8080` | kafka, connect | Web UI to browse Kafka topics/messages, consumer lag and the Debezium connector |
 | **connect** | `debezium/connect:2.7.3.Final` | `8083` | kafka, postgres | Kafka Connect running the Debezium Postgres connector |
 | **connect-init** | `curlimages/curl:8.8.0` | — | connect | One-shot: `PUT`s the connector config from `docker/debezium/`, then exits |
 | **indexer-worker** | built from `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch |
@@ -147,7 +151,8 @@ curl "http://localhost:9200/product_chunks/_count?pretty"
 ```
 
 The API is at `http://localhost:8000` (interactive docs at
-`http://localhost:8000/docs`); Kibana is at `http://localhost:5601`.
+`http://localhost:8000/docs`); Kibana is at `http://localhost:5601`; Kafka UI is
+at `http://localhost:8080`.
 
 ---
 
@@ -158,6 +163,7 @@ The API is at `http://localhost:8000` (interactive docs at
 ```bash
 docker compose up -d postgres elasticsearch kafka   # just the infra
 docker compose up -d kibana                          # add Kibana later
+docker compose up -d kafka-ui                         # add Kafka UI later
 docker compose stop indexer-worker embedding-worker  # pause the CDC workers
 docker compose restart connect-init                  # re-register the connector
 ```
@@ -191,6 +197,44 @@ docker compose down -v       # also delete volumes (pgdata, esdata, kafkadata)
 Removing volumes wipes the catalog, vectors, Elasticsearch index **and** the
 Kafka log (including Debezium offsets), so the next `up` + `ingest` starts
 completely clean.
+
+### Clear the data & re-ingest (keep the stack running)
+
+To wipe the product data and start over **without** tearing down the containers
+(and without losing the Kafka log), empty all three data stores, then re-run
+`ingest.py`. The three stores are the source catalog (`product_catalog`), the
+derived pgvector table (`products`), and the Elasticsearch keyword index
+(`product_chunks`):
+
+```bash
+# 1. Postgres — empty the source catalog AND the derived pgvector table
+docker compose exec postgres psql -U postgres -d rag_products \
+  -c "TRUNCATE product_catalog, products;"
+
+# 2. Elasticsearch — drop the keyword index (a 404 here is fine if it's already gone)
+curl -X DELETE "http://localhost:9200/product_chunks"
+
+# 3. Re-ingest — writes all three targets directly (catalog + pgvector + ES)
+docker compose exec app uv run python scripts/ingest.py
+```
+
+`ingest.py` recreates the index and both tables on demand (`CREATE … IF NOT
+EXISTS`), so truncating/dropping first is safe. Because it writes pgvector and
+Elasticsearch **directly**, you don't have to wait for the CDC workers to rebuild
+— the re-inserted catalog rows still flow through Debezium, but the embedding
+worker skips re-embedding via each chunk's `content_hash`.
+
+!!! warning "TRUNCATE is not propagated by CDC — clear the indexes yourself"
+    The sync workers only apply row-level `c`/`u`/`d`/`r` events; a Debezium
+    **TRUNCATE** event is ignored. So truncating `product_catalog` on its own does
+    **not** clear `products` / `product_chunks` — you must empty those two stores
+    explicitly (steps 1–2). If you'd rather let CDC do the deletion, run
+    `DELETE FROM product_catalog;` (not `TRUNCATE`): each row emits a `d` event
+    that the workers propagate to both indexes automatically (slower for a large
+    catalog, and requires the workers to be running).
+
+For a *total* clean slate — including the Kafka log and Debezium offsets — use
+`docker compose down -v` (above) instead, then `up` + `ingest`.
 
 ---
 
@@ -232,7 +276,16 @@ docker compose exec postgres psql -U postgres -d rag_products \
   -c "SELECT id, metadata->>'chunk_type' AS type FROM products LIMIT 5;"
 ```
 
+### Kafka — Kafka UI
+
+For a point-and-click view of topics, live messages, consumer-group lag and the
+Debezium connector, open **[Kafka UI](kafka-ui.md)** at `http://localhost:8080`
+(no login). It's the "Kibana for Kafka" in this stack — see the dedicated page
+for a walkthrough.
+
 ### Kafka — topics & consumer lag
+
+The same information is available from the CLI:
 
 ```bash
 # List topics (the CDC topic is ragshop.public.product_catalog)
@@ -284,6 +337,7 @@ Compose stack the infra variables are set for you.
 | --------- | ------- | --- |
 | `8000` | app | REST API + Swagger UI |
 | `5601` | kibana | Elasticsearch UI |
+| `8080` | kafka-ui | Kafka UI (topics, messages, consumer lag, connector) |
 | `9200` | elasticsearch | ES REST API |
 | `5432` | postgres | SQL access (psql / DBeaver) |
 | `8083` | connect | Kafka Connect / Debezium REST |
@@ -395,7 +449,8 @@ docker compose -f docker-compose.prod.yml exec app uv run python scripts/ingest.
 | `connect-init` exits without registering | `connect` wasn't healthy yet. Re-run `docker compose up -d connect-init` and check `docker compose logs connect`. |
 | Catalog writes don't appear in search | A sync worker is down or lagging. Check `docker compose logs embedding-worker indexer-worker` and the consumer-group `LAG` (see above). |
 | Elasticsearch container keeps restarting | Not enough memory. It's pinned to `-Xms512m -Xmx512m`; give Docker more RAM or lower `ES_JAVA_OPTS`. |
-| Port already in use | Another process holds `8000/5432/9200/5601/8083/6379`. Stop it or remap the `ports:` entry. |
+| Kafka UI shows no cluster / "offline" | The broker wasn't ready when it started, or `KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS` is wrong. Check `docker compose logs kafka-ui` and that `kafka` is healthy. |
+| Port already in use | Another process holds `8000/5432/9200/5601/8080/8083/6379`. Stop it or remap the `ports:` entry. |
 
 ---
 
