@@ -87,6 +87,7 @@ plugins:
             Schemas: Schemas
             Deployment: Triển khai
             Docker: Docker
+            Config Files: Tệp cấu hình
             Monitoring: Giám sát
             CI/CD: CI/CD
             Development: Phát triển
@@ -123,6 +124,7 @@ nav:
       - Schemas: api/schemas.md
   - Deployment:
       - Docker: deployment/docker.md
+      - Config Files: deployment/docker-config.md
       - Monitoring: deployment/monitoring.md
       - Kibana: deployment/kibana.md
       - Kafka UI: deployment/kafka-ui.md

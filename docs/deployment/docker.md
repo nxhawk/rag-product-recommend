@@ -47,6 +47,58 @@ writing vectors back into `products` never creates a feedback loop.
 
 ---
 
+## Compose file organization { #compose-file-organization }
+
+`docker-compose.yml` is a thin **umbrella** file: it doesn't define services
+itself, it `include`s one file per concern. `docker compose up` from the `docker/`
+folder still starts everything as a single project (one network, merged volumes),
+and `depends_on` across files works because Compose merges them into one model
+before evaluating it.
+
+```yaml
+# docker/docker-compose.yml
+include:
+  - compose.core.yml        # app + postgres + redis        (API + datastores)
+  - compose.search.yml      # elasticsearch + kibana         (keyword index + UI)
+  - compose.cdc.yml         # kafka + debezium + kafka-ui + sync workers
+  - compose.monitoring.yml  # prometheus + grafana + exporters
+```
+
+| File | Services | Concern |
+| ---- | -------- | ------- |
+| `compose.core.yml` | `app`, `postgres`, `redis` | The API and its primary datastores (catalog + pgvector + cache). Declares the `pgdata` volume. |
+| `compose.search.yml` | `elasticsearch`, `kibana` | Keyword/BM25 index `product_chunks` and its browser UI. Declares `esdata`. |
+| `compose.cdc.yml` | `kafka`, `connect`, `connect-init`, `kafka-ui`, `indexer-worker`, `embedding-worker` | The change-data-capture pipeline, its UI, and the two sync workers. Declares `kafkadata`. |
+| `compose.monitoring.yml` | `prometheus`, `grafana`, `postgres-exporter`, `redis-exporter`, `elasticsearch-exporter`, `kafka-exporter` | Observability. Declares `promdata`, `grafanadata`. See [Monitoring](monitoring.md). |
+
+Why it's organized this way:
+
+- **One concern per file** — each file is a self-contained slice you can read in
+  isolation, and each UI lives next to the backend it inspects (Kibana with
+  Elasticsearch, Kafka UI with Kafka).
+- **Easy to extend** — to add a new group (say a logging stack), drop in a
+  `compose.<concern>.yml` and add one line to the `include` list. Nothing else
+  changes.
+- **Consistent relative paths** — all files live in `docker/`, so the build
+  context (`..`), `../.env`, `../data` and `./prometheus/...` mounts resolve the
+  same no matter which file declares them.
+- **Less duplication** — the two near-identical sync workers share a
+  file-local YAML anchor (`x-sync-worker`) in `compose.cdc.yml`.
+
+!!! note "Requires Compose v2.20+"
+    The `include` element needs Docker Compose **v2.20 or newer** (`docker
+    compose version`). All commands on this page are run from the `docker/`
+    folder and target the umbrella file, exactly as before. The per-concern
+    files are not meant to be run standalone (a slice like `compose.core.yml`
+    references services defined in sibling files); always go through
+    `docker-compose.yml`. Selecting a subset by **service name** still works,
+    e.g. `docker compose up -d prometheus grafana`.
+
+Field-by-field explanations of the mounted config files (Debezium, Prometheus,
+Grafana) live in **[Config Files](docker-config.md)**.
+
+---
+
 ## Option 1 — Docker Compose (Full Stack)
 
 ### Prerequisites

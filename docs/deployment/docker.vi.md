@@ -46,6 +46,56 @@ capture `product_catalog`, nên việc embedding worker ghi vector ngược lạ
 
 ---
 
+## Tổ chức các file Compose { #compose-file-organization }
+
+`docker-compose.yml` là một file **umbrella** (bao ngoài) mỏng: nó không tự định
+nghĩa service mà `include` mỗi concern một file. Chạy `docker compose up` từ thư
+mục `docker/` vẫn khởi động mọi thứ như một project duy nhất (chung một network,
+gộp volume), và `depends_on` xuyên file vẫn hoạt động vì Compose gộp tất cả thành
+một model trước khi đánh giá.
+
+```yaml
+# docker/docker-compose.yml
+include:
+  - compose.core.yml        # app + postgres + redis        (API + datastore)
+  - compose.search.yml      # elasticsearch + kibana         (index keyword + UI)
+  - compose.cdc.yml         # kafka + debezium + kafka-ui + sync worker
+  - compose.monitoring.yml  # prometheus + grafana + exporter
+```
+
+| File | Service | Concern |
+| ---- | ------- | ------- |
+| `compose.core.yml` | `app`, `postgres`, `redis` | API và các datastore chính (catalog + pgvector + cache). Khai báo volume `pgdata`. |
+| `compose.search.yml` | `elasticsearch`, `kibana` | Index keyword/BM25 `product_chunks` và UI xem nó. Khai báo `esdata`. |
+| `compose.cdc.yml` | `kafka`, `connect`, `connect-init`, `kafka-ui`, `indexer-worker`, `embedding-worker` | Pipeline change-data-capture, UI của nó và hai sync worker. Khai báo `kafkadata`. |
+| `compose.monitoring.yml` | `prometheus`, `grafana`, `postgres-exporter`, `redis-exporter`, `elasticsearch-exporter`, `kafka-exporter` | Observability. Khai báo `promdata`, `grafanadata`. Xem [Giám sát](monitoring.md). |
+
+Vì sao tổ chức như vậy:
+
+- **Mỗi file một concern** — từng file là một lát cắt độc lập, đọc riêng được, và
+  mỗi UI nằm cạnh backend nó soi (Kibana cạnh Elasticsearch, Kafka UI cạnh Kafka).
+- **Dễ mở rộng** — muốn thêm nhóm mới (ví dụ stack logging), thả vào một file
+  `compose.<concern>.yml` và thêm một dòng vào danh sách `include`. Không đụng gì
+  khác.
+- **Đường dẫn tương đối nhất quán** — mọi file nằm trong `docker/`, nên build
+  context (`..`), `../.env`, `../data` và mount `./prometheus/...` phân giải giống
+  nhau dù file nào khai báo.
+- **Bớt trùng lặp** — hai sync worker gần như giống hệt nhau dùng chung một YAML
+  anchor cục bộ (`x-sync-worker`) trong `compose.cdc.yml`.
+
+!!! note "Cần Compose v2.20+"
+    Phần tử `include` cần Docker Compose **v2.20 trở lên** (`docker compose
+    version`). Mọi lệnh trong trang này chạy từ thư mục `docker/` và nhắm tới file
+    umbrella, y như trước. Các file theo concern không dùng để chạy độc lập (một
+    lát như `compose.core.yml` tham chiếu service định nghĩa ở file khác); luôn đi
+    qua `docker-compose.yml`. Chọn tập con theo **tên service** vẫn được, ví dụ
+    `docker compose up -d prometheus grafana`.
+
+Giải thích chi tiết từng file cấu hình được mount (Debezium, Prometheus, Grafana)
+nằm ở **[Tệp cấu hình](docker-config.md)**.
+
+---
+
 ## Cách 1 — Docker Compose (Full Stack)
 
 ### Yêu cầu

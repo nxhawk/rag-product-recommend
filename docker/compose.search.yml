@@ -1,0 +1,41 @@
+# Keyword search: Elasticsearch (BM25 index `product_chunks`) + Kibana, its UI.
+# The index is a CDC sink kept in sync by the indexer-worker (compose.cdc.yml).
+# Included by docker-compose.yml.
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # Kibana - web UI to browse/query Elasticsearch (Discover + Dev Tools).
+  # Version pinned to the Elasticsearch image above. Open http://localhost:5601,
+  # then create a Data View for the `product_chunks` index to browse it as a grid.
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.14.3
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5601/api/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  esdata:

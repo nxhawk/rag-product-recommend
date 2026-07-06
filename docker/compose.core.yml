@@ -1,0 +1,56 @@
+# Core services: the API and its primary datastores.
+# This is the minimum needed to serve requests (Postgres = catalog + pgvector,
+# Redis = cache). The API also reads Elasticsearch (see compose.search.yml).
+# Included by docker-compose.yml.
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rag_products
+      KEYWORD_BACKEND: elasticsearch
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    # Logical decoding so Debezium can stream row changes from the WAL.
+    command: >
+      postgres -c wal_level=logical
+               -c max_wal_senders=4
+               -c max_replication_slots=4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rag_products
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rag_products"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

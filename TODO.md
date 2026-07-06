@@ -1,0 +1,3 @@
+Loki + Promtail (chuẩn "Grafana-native"): Promtail đọc log các container Docker → đẩy vào Loki → Grafana hiển thị log ngay cạnh metric, cùng khung thời gian/label để đối chiếu (ví dụ latency tăng thì xem luôn log lỗi tương ứng). Đây là cách gọn nhất vì bạn đã có Grafana.
+
+Tận dụng Elasticsearch + Kibana sẵn có: ship log app vào Elasticsearch (Filebeat/Fluent Bit) rồi xem trong Kibana — không cần thêm hệ thống mới, nhưng log tách khỏi Grafana.
