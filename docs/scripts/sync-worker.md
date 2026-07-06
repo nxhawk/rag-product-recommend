@@ -71,5 +71,11 @@ flowchart TB
   (`auto.offset.reset=earliest`); Debezium's initial snapshot (`op = r`) is how a
   fresh index gets bootstrapped. Thanks to the stored `content_hash`, replaying
   the snapshot costs **zero** embedding calls when nothing changed.
+- **Resilient startup**: the worker waits for its datastore before consuming —
+  `ESKeywordSearch.setup()` / `VectorStore.setup()` retry with exponential
+  backoff (up to ~30 attempts, 1→5 s) instead of crashing if Elasticsearch or
+  Postgres is briefly unreachable. In Docker, `run_loop` also touches
+  `WORKER_HEARTBEAT_FILE` (default `/tmp/worker.heartbeat`) every poll, and a
+  Compose healthcheck marks the worker unhealthy if that heartbeat goes stale.
 - Both handlers share `build_chunk_payload()` with `ingest.py`, so bootstrap and
   CDC produce identically shaped chunk documents.

@@ -46,6 +46,56 @@ The **write** half is synchronous and returns as soon as the catalog row is
 committed. The **consume** half runs continuously in two independent worker
 processes.
 
+## Kafka topology: brokers, topics, groups & the connector
+
+Zooming into the Kafka layer, this is how the broker, its topics, the Debezium
+connector and the two consumer groups relate:
+
+```mermaid
+flowchart LR
+    PG[("postgres\nproduct_catalog (WAL)")]
+
+    subgraph CONNECT["connect service (Kafka Connect)"]
+        DBZ["Debezium connector\nproduct-catalog-connector"]
+    end
+
+    subgraph BROKER["Kafka broker (single-node KRaft)"]
+        DATA[["ragshop.public.product_catalog\nCDC change events (op = c/u/d/r)"]]
+        subgraph INTERNAL["Kafka Connect internal topics"]
+            CFG[["rag_connect_configs"]]
+            OFF[["rag_connect_offsets"]]
+            STA[["rag_connect_statuses"]]
+        end
+    end
+
+    subgraph GI["consumer group: rag-sync-indexer"]
+        CI["indexer-worker (1 consumer)"]
+    end
+    subgraph GE["consumer group: rag-sync-embedder"]
+        CE["embedding-worker (1 consumer)"]
+    end
+
+    ES[("Elasticsearch\nproduct_chunks")]
+    PGV[("pgvector\nproducts")]
+
+    PG -->|"WAL (logical)"| DBZ
+    DBZ -->|"produces"| DATA
+    DBZ <-->|"config / source offset / status"| INTERNAL
+    DATA -->|"subscribe (own offset)"| CI
+    DATA -->|"subscribe (own offset)"| CE
+    CI --> ES
+    CE --> PGV
+```
+
+- **Broker** — one single-node Kafka in **KRaft** mode (no ZooKeeper) hosts every topic; each is single-partition in the dev stack.
+- **Data topic** — `ragshop.public.product_catalog`, named `{topic.prefix}.{schema}.{table}` (`ragshop` + `public.product_catalog`). Debezium **produces** one message here per catalog row change.
+- **Kafka Connect internal topics** — `rag_connect_configs`, `rag_connect_offsets`, `rag_connect_statuses`. Kafka Connect creates these from the `CONFIG_STORAGE_TOPIC` / `OFFSET_STORAGE_TOPIC` / `STATUS_STORAGE_TOPIC` settings and stores the connector's **config**, its **source offset** (how far Debezium has read the Postgres WAL) and each task's **status** — so a `connect` restart resumes exactly where it left off.
+- **Connector** — the Debezium Postgres connector is a **source** connector inside the `connect` service: it reads the WAL, **produces** to the data topic, and **reads/writes** the internal topics for its own state.
+- **Consumer groups** — `rag-sync-indexer` and `rag-sync-embedder` each subscribe to the data topic as a **separate** group, so Kafka **fans out** every event to both; each group commits its **own** offset and can lag independently. Each group has exactly **one** consumer (one worker container) owning the single partition.
+
+!!! note "Two different kinds of 'offset'"
+    `rag_connect_offsets` stores the **connector's source offset** — Debezium's position in the Postgres WAL. The **consumer-group offsets** for `rag-sync-*` are separate; Kafka keeps those in its own internal `__consumer_offsets` topic. Consumer **lag** (see [Docker](../deployment/docker.md#kafka-topics-consumer-lag)) is measured against the latter.
+
 ## Components & files
 
 Everything CDC-related lives in `src/sync/`, driven by one entry-point script.

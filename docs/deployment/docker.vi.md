@@ -97,8 +97,8 @@ check (xem bên dưới), và `connect-init` đăng ký Debezium connector khi m
 | **kafka-ui** | `kafbat/kafka-ui:v1.4.2` | `8080` | kafka, connect | Web UI xem topic/message Kafka, consumer lag và Debezium connector |
 | **connect** | `debezium/connect:2.7.3.Final` | `8083` | kafka, postgres | Kafka Connect chạy Debezium Postgres connector |
 | **connect-init** | `curlimages/curl:8.8.0` | — | connect | One-shot: `PUT` cấu hình connector từ `docker/debezium/` rồi thoát |
-| **indexer-worker** | build từ `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch |
-| **embedding-worker** | build từ `docker/Dockerfile` | — | kafka, postgres | `sync_worker.py --role embedder` → pgvector (chỉ re-embed khi text đổi) |
+| **indexer-worker** | build từ `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch; chờ ES lúc khởi động, healthcheck bằng heartbeat |
+| **embedding-worker** | build từ `docker/Dockerfile` | — | kafka, postgres | `sync_worker.py --role embedder` → pgvector (chỉ re-embed khi text đổi); chờ Postgres lúc khởi động, healthcheck bằng heartbeat |
 | **redis** | `redis:7-alpine` | `6379` | — | Cache |
 
 ### Thứ tự khởi động & health gating
@@ -111,6 +111,7 @@ Compose không khởi động một service cho tới khi các phụ thuộc bá
   `http://connect:8083/connectors/product-catalog-connector/config`
   (idempotent — an toàn ở mỗi lần `up`), in xác nhận, rồi thoát với `restart: "no"`.
 - `indexer-worker` và `embedding-worker` chạy với `restart: unless-stopped`; lần đầu khởi động chúng consume **initial snapshot** của Debezium (`auto.offset.reset=earliest`) — đó là cách một index mới được bootstrap.
+- **Khởi động worker có khả năng chịu lỗi.** Ngoài `depends_on`, mỗi worker còn *chờ* datastore của mình trước khi consume: `ESKeywordSearch.setup()` và `VectorStore.setup()` retry với exponential backoff (tối đa ~30 lần, 1→5 s) thay vì crash nếu Elasticsearch/Postgres tạm thời chưa lên. Mỗi worker cũng ghi một file heartbeat (`WORKER_HEARTBEAT_FILE`, mặc định `/tmp/worker.heartbeat`) mỗi vòng poll, và `healthcheck` của Compose đánh dấu unhealthy khi file đó cũ quá (>30 s). Nhờ vậy `docker compose ps` chỉ ra worker thực sự treo/chết, còn worker chỉ đang chờ topic xuất hiện vẫn **healthy**.
 - `app` chỉ phụ thuộc `postgres`, `elasticsearch` và `redis` — không phụ thuộc Kafka/Connect — nên API có thể phục vụ đọc trong khi pipeline CDC còn đang khởi động.
 
 ### 3. Nạp dữ liệu (lần đầu)
@@ -320,6 +321,7 @@ các biến hạ tầng đã được đặt sẵn cho bạn.
 | `DATABASE_URL` | Auto | DSN Postgres; Compose đặt thành `postgresql://postgres:postgres@postgres:5432/rag_products` |
 | `ELASTICSEARCH_URL` | Auto | Compose đặt thành `http://elasticsearch:9200` |
 | `KAFKA_BOOTSTRAP_SERVERS` | Auto | Compose đặt thành `kafka:9092` (cho sync worker) |
+| `WORKER_HEARTBEAT_FILE` | Auto | Compose đặt (`/tmp/worker.heartbeat`) cho sync worker — file mỗi worker touch mỗi vòng poll và healthcheck theo dõi. Không đặt = tắt heartbeat |
 | `KEYWORD_BACKEND` | Auto | `elasticsearch` trong Compose; fallback về BM25 in-memory nếu ES không truy cập được |
 | `ENVIRONMENT` | Không | `development` (mặc định) hoặc `production` |
 | `LOG_LEVEL` | Không | `DEBUG`, `INFO` (mặc định), `WARNING`, `ERROR` |
@@ -441,8 +443,11 @@ docker compose -f docker-compose.prod.yml exec app uv run python scripts/ingest.
 | ----------- | ------------------------ |
 | `app` trả `503` ở `/api/recommend` | Chưa nạp dữ liệu, hoặc provider API key thiếu/sai. Chạy `ingest.py` và kiểm tra `.env`. |
 | Gợi ý chạy được nhưng kết quả keyword yếu | Elasticsearch không truy cập được → API âm thầm fallback về BM25 in-memory. Xem `docker compose logs elasticsearch` và `curl localhost:9200/_cluster/health`. |
-| `connect-init` thoát mà không đăng ký | `connect` chưa healthy. Chạy lại `docker compose up -d connect-init` và xem `docker compose logs connect`. |
+| `connect-init` thoát mà không đăng ký | `connect` chưa healthy. Chạy lại `docker compose up -d --force-recreate connect-init` và xem `docker compose logs connect-init`. |
+| `.../connectors/product-catalog-connector/status` trả `404 No status found` | Debezium connector chưa được đăng ký, nên topic `ragshop.public.product_catalog` không được tạo và **cả hai** index đều rỗng. Đăng ký lại: `docker compose up -d --force-recreate connect-init` (hoặc `PUT` config bằng tay) rồi kiểm tra lại status. |
 | Ghi catalog không xuất hiện trong tìm kiếm | Một sync worker chết hoặc đang trễ. Xem `docker compose logs embedding-worker indexer-worker` và cột `LAG` của consumer-group (xem trên). |
+| Elasticsearch có data nhưng pgvector (`products`) rỗng | Chỉ nhánh **embedding** hỏng — thường do thiếu/sai `GEMINI_API_KEY` (indexer không cần key). Xem `docker compose logs embedding-worker`; thêm key vào `.env` rồi `docker compose up -d --force-recreate embedding-worker`. |
+| Một worker cứ restart ngay sau khi khởi động | Nó không nối được datastore. Worker giờ retry với backoff nên sẽ tự lành khi Postgres/Elasticsearch lên; nếu vẫn lặp thì dependency thực sự đang down hoặc khác network — xem `docker compose ps` và log service đó. |
 | Container Elasticsearch cứ restart | Thiếu bộ nhớ. Nó bị ghim `-Xms512m -Xmx512m`; cấp thêm RAM cho Docker hoặc giảm `ES_JAVA_OPTS`. |
 | Kafka UI không thấy cluster / báo "offline" | Broker chưa sẵn sàng lúc khởi động, hoặc `KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS` sai. Xem `docker compose logs kafka-ui` và kiểm tra `kafka` đã healthy chưa. |
 | Cổng đã bị chiếm | Tiến trình khác đang giữ `8000/5432/9200/5601/8080/8083/6379`. Dừng nó hoặc đổi mapping `ports:`. |

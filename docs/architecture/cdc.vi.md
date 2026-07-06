@@ -45,6 +45,56 @@ flowchart LR
 Nửa **ghi** là đồng bộ và trả về ngay khi row catalog được commit. Nửa
 **consume** chạy liên tục trong hai tiến trình worker độc lập.
 
+## Topology Kafka: broker, topic, consumer group & connector
+
+Phóng to vào tầng Kafka, đây là quan hệ giữa broker, các topic, Debezium
+connector và hai consumer group:
+
+```mermaid
+flowchart LR
+    PG[("postgres\nproduct_catalog (WAL)")]
+
+    subgraph CONNECT["connect service (Kafka Connect)"]
+        DBZ["Debezium connector\nproduct-catalog-connector"]
+    end
+
+    subgraph BROKER["Kafka broker (single-node KRaft)"]
+        DATA[["ragshop.public.product_catalog\nCDC change events (op = c/u/d/r)"]]
+        subgraph INTERNAL["Topic nội bộ của Kafka Connect"]
+            CFG[["rag_connect_configs"]]
+            OFF[["rag_connect_offsets"]]
+            STA[["rag_connect_statuses"]]
+        end
+    end
+
+    subgraph GI["consumer group: rag-sync-indexer"]
+        CI["indexer-worker (1 consumer)"]
+    end
+    subgraph GE["consumer group: rag-sync-embedder"]
+        CE["embedding-worker (1 consumer)"]
+    end
+
+    ES[("Elasticsearch\nproduct_chunks")]
+    PGV[("pgvector\nproducts")]
+
+    PG -->|"WAL (logical)"| DBZ
+    DBZ -->|"produces"| DATA
+    DBZ <-->|"config / source offset / status"| INTERNAL
+    DATA -->|"subscribe (offset riêng)"| CI
+    DATA -->|"subscribe (offset riêng)"| CE
+    CI --> ES
+    CE --> PGV
+```
+
+- **Broker** — một Kafka single-node chạy chế độ **KRaft** (không ZooKeeper), chứa mọi topic; ở stack dev mỗi topic một partition.
+- **Data topic** — `ragshop.public.product_catalog`, đặt tên theo `{topic.prefix}.{schema}.{table}` (`ragshop` + `public.product_catalog`). Debezium **produce** mỗi thay đổi row catalog thành một message ở đây.
+- **Topic nội bộ của Kafka Connect** — `rag_connect_configs`, `rag_connect_offsets`, `rag_connect_statuses`. Kafka Connect tạo chúng từ các setting `CONFIG_STORAGE_TOPIC` / `OFFSET_STORAGE_TOPIC` / `STATUS_STORAGE_TOPIC`, lưu **config** của connector, **source offset** (Debezium đã đọc tới đâu trong WAL của Postgres) và **status** của từng task — nên `connect` khởi động lại sẽ tiếp tục đúng chỗ.
+- **Connector** — Debezium Postgres connector là **source** connector nằm trong service `connect`: đọc WAL, **produce** vào data topic, và **đọc/ghi** các topic nội bộ để lưu trạng thái của chính nó.
+- **Consumer group** — `rag-sync-indexer` và `rag-sync-embedder` mỗi cái subscribe data topic như một group **riêng**, nên Kafka **fan-out** mọi event tới cả hai; mỗi group commit **offset riêng** và có thể trễ độc lập. Mỗi group có đúng **một** consumer (một container worker) sở hữu partition duy nhất.
+
+!!! note "Hai loại 'offset' khác nhau"
+    `rag_connect_offsets` lưu **source offset của connector** — vị trí Debezium trong WAL của Postgres. Còn **offset của consumer group** `rag-sync-*` là thứ khác; Kafka giữ chúng trong topic nội bộ `__consumer_offsets`. Consumer **lag** (xem [Docker](../deployment/docker.vi.md#kafka-topic-consumer-lag)) đo theo loại sau.
+
 ## Thành phần & file
 
 Mọi thứ liên quan CDC nằm trong `src/sync/`, được điều khiển bởi một script

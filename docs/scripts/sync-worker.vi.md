@@ -72,5 +72,11 @@ flowchart TB
   snapshot khởi tạo của Debezium (`op = r`) là cách một chỉ mục mới được bootstrap.
   Nhờ `content_hash` đã lưu, việc phát lại snapshot tốn **không** một lời gọi
   embedding nào khi không có gì thay đổi.
+- **Khởi động chịu lỗi**: worker chờ datastore của mình trước khi consume —
+  `ESKeywordSearch.setup()` / `VectorStore.setup()` retry với exponential backoff
+  (tối đa ~30 lần, 1→5 s) thay vì crash nếu Elasticsearch hoặc Postgres tạm thời
+  chưa lên. Trong Docker, `run_loop` cũng touch `WORKER_HEARTBEAT_FILE` (mặc định
+  `/tmp/worker.heartbeat`) mỗi vòng poll, và healthcheck của Compose đánh dấu
+  worker unhealthy nếu heartbeat cũ quá.
 - Cả hai handler dùng chung `build_chunk_payload()` với `ingest.py`, nên bootstrap
   và CDC tạo ra các tài liệu chunk có hình dạng giống hệt nhau.

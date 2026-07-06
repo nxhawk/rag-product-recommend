@@ -97,8 +97,8 @@ connector once everything is ready.
 | **kafka-ui** | `kafbat/kafka-ui:v1.4.2` | `8080` | kafka, connect | Web UI to browse Kafka topics/messages, consumer lag and the Debezium connector |
 | **connect** | `debezium/connect:2.7.3.Final` | `8083` | kafka, postgres | Kafka Connect running the Debezium Postgres connector |
 | **connect-init** | `curlimages/curl:8.8.0` | — | connect | One-shot: `PUT`s the connector config from `docker/debezium/`, then exits |
-| **indexer-worker** | built from `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch |
-| **embedding-worker** | built from `docker/Dockerfile` | — | kafka, postgres | `sync_worker.py --role embedder` → pgvector (re-embeds only on text change) |
+| **indexer-worker** | built from `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch; waits for ES at startup, heartbeat healthcheck |
+| **embedding-worker** | built from `docker/Dockerfile` | — | kafka, postgres | `sync_worker.py --role embedder` → pgvector (re-embeds only on text change); waits for Postgres at startup, heartbeat healthcheck |
 | **redis** | `redis:7-alpine` | `6379` | — | Cache service |
 
 ### Startup order & health gating
@@ -111,6 +111,7 @@ Compose does not start a service until its dependencies report **healthy**:
   `http://connect:8083/connectors/product-catalog-connector/config`
   (idempotent — safe on every `up`), prints a confirmation, and exits with `restart: "no"`.
 - `indexer-worker` and `embedding-worker` run with `restart: unless-stopped`; on their first start they consume the Debezium **initial snapshot** (`auto.offset.reset=earliest`), which is how a fresh index gets bootstrapped.
+- **Worker startup is resilient.** Beyond `depends_on`, each worker also *waits* for its own datastore before consuming: `ESKeywordSearch.setup()` and `VectorStore.setup()` retry with exponential backoff (up to ~30 attempts, 1→5 s) instead of crashing if Elasticsearch/Postgres is briefly unreachable. Each worker also writes a heartbeat file (`WORKER_HEARTBEAT_FILE`, default `/tmp/worker.heartbeat`) every poll, and a Compose `healthcheck` marks it unhealthy when that file goes stale (>30 s). So `docker compose ps` flags a genuinely hung/crashed worker, while one that is merely idling — waiting for the topic to appear — stays **healthy**.
 - `app` depends only on `postgres`, `elasticsearch` and `redis` — not on Kafka/Connect — so the API can serve reads while the CDC pipeline is still warming up.
 
 ### 3. Load data (first time)
@@ -323,6 +324,7 @@ Compose stack the infra variables are set for you.
 | `DATABASE_URL` | Auto | Postgres DSN; set by Compose to `postgresql://postgres:postgres@postgres:5432/rag_products` |
 | `ELASTICSEARCH_URL` | Auto | Set by Compose to `http://elasticsearch:9200` |
 | `KAFKA_BOOTSTRAP_SERVERS` | Auto | Set by Compose to `kafka:9092` (for the sync workers) |
+| `WORKER_HEARTBEAT_FILE` | Auto | Set by Compose (`/tmp/worker.heartbeat`) for the sync workers — the file each worker touches every poll and the healthcheck watches. Unset = heartbeat disabled |
 | `KEYWORD_BACKEND` | Auto | `elasticsearch` in Compose; falls back to in-memory BM25 if ES is unreachable |
 | `ENVIRONMENT` | No | `development` (default) or `production` |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO` (default), `WARNING`, `ERROR` |
@@ -446,8 +448,11 @@ docker compose -f docker-compose.prod.yml exec app uv run python scripts/ingest.
 | ------- | ------------------ |
 | `app` returns `503` on `/api/recommend` | No data ingested yet, or the provider API key is missing/invalid. Run `ingest.py` and check `.env`. |
 | Recommendations work but keyword hits look weak | Elasticsearch unreachable → the API silently fell back to in-memory BM25. Check `docker compose logs elasticsearch` and `curl localhost:9200/_cluster/health`. |
-| `connect-init` exits without registering | `connect` wasn't healthy yet. Re-run `docker compose up -d connect-init` and check `docker compose logs connect`. |
+| `connect-init` exits without registering | `connect` wasn't healthy yet. Re-run `docker compose up -d --force-recreate connect-init` and check `docker compose logs connect-init`. |
+| `.../connectors/product-catalog-connector/status` returns `404 No status found` | The Debezium connector isn't registered, so the topic `ragshop.public.product_catalog` is never created and **both** indexes stay empty. Register it: `docker compose up -d --force-recreate connect-init` (or `PUT` the config manually), then re-check the status. |
 | Catalog writes don't appear in search | A sync worker is down or lagging. Check `docker compose logs embedding-worker indexer-worker` and the consumer-group `LAG` (see above). |
+| Elasticsearch has data but pgvector (`products`) is empty | Only the **embedding** worker failed — most often a missing/invalid `GEMINI_API_KEY` (the indexer needs no key). Check `docker compose logs embedding-worker`; add the key to `.env`, then `docker compose up -d --force-recreate embedding-worker`. |
+| A worker keeps restarting right after startup | It can't reach its datastore. The workers now retry with backoff, so this self-heals once Postgres/Elasticsearch is up; if it persists, the dependency is genuinely down or on another network — check `docker compose ps` and that service's logs. |
 | Elasticsearch container keeps restarting | Not enough memory. It's pinned to `-Xms512m -Xmx512m`; give Docker more RAM or lower `ES_JAVA_OPTS`. |
 | Kafka UI shows no cluster / "offline" | The broker wasn't ready when it started, or `KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS` is wrong. Check `docker compose logs kafka-ui` and that `kafka` is healthy. |
 | Port already in use | Another process holds `8000/5432/9200/5601/8080/8083/6379`. Stop it or remap the `ports:` entry. |

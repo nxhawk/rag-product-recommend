@@ -11,6 +11,8 @@ on the semantic branch) instead of post-filtering in Python.
 import logging
 from typing import Any
 
+from src.utils.helpers import retry_with_backoff
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_ES_URL = "http://localhost:9200"
@@ -87,13 +89,33 @@ class ESKeywordSearch:
         self.timeout = timeout
         self.client = None
 
-    def setup(self) -> None:
-        """Connect and create the index (idempotent). Raises if unreachable."""
+    def setup(self, max_attempts: int = 30, base_delay: float = 1.0) -> None:
+        """Connect and create the index (idempotent).
+
+        Waits (with backoff) for the cluster to become reachable so a worker that
+        starts before Elasticsearch is up retries instead of crashing. Raises the
+        last :class:`ConnectionError` only after ``max_attempts`` fail.
+        """
         from elasticsearch import Elasticsearch
 
-        self.client = Elasticsearch(self.url, request_timeout=self.timeout)
-        if not self.client.ping():
-            raise ConnectionError(f"Elasticsearch not reachable at {self.url}")
+        def _connect() -> Any:
+            client = Elasticsearch(self.url, request_timeout=self.timeout)
+            try:
+                reachable = client.ping()
+            except Exception as exc:  # transport errors -> treat as not-ready yet
+                raise ConnectionError(f"Elasticsearch not reachable at {self.url}") from exc
+            if not reachable:
+                raise ConnectionError(f"Elasticsearch not reachable at {self.url}")
+            return client
+
+        self.client = retry_with_backoff(
+            _connect,
+            retry_on=(ConnectionError,),
+            max_attempts=max_attempts,
+            base_delay=base_delay,
+            logger=logger,
+            description=f"Elasticsearch at {self.url}",
+        )
         if not self.client.indices.exists(index=self.index_name):
             self.client.indices.create(
                 index=self.index_name,

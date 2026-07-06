@@ -7,11 +7,23 @@ ids, upsert/delete semantics), so redelivery after a crash is harmless.
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from src.sync.events import ChangeEvent, parse_debezium_message
 
 logger = logging.getLogger(__name__)
+
+
+def _touch_heartbeat(path: str | None) -> None:
+    """Bump the heartbeat file's mtime so a healthcheck can tell the worker is
+    alive (even while idly waiting for the topic). Never fatal."""
+    if not path:
+        return
+    try:
+        Path(path).touch()
+    except OSError:
+        pass
 
 
 class EventHandler(Protocol):
@@ -47,11 +59,18 @@ def run_loop(
     handler: EventHandler,
     poll_timeout: float = 1.0,
     should_stop: Callable[[], bool] | None = None,
+    heartbeat_path: str | None = None,
 ) -> int:
-    """Consume-apply-commit loop. Returns events applied (when stopped)."""
+    """Consume-apply-commit loop. Returns events applied (when stopped).
+
+    When ``heartbeat_path`` is set, its mtime is bumped every poll so a Docker
+    healthcheck can distinguish a live worker (even one idly waiting for the
+    topic) from a hung or crashed one.
+    """
     applied = 0
     try:
         while not (should_stop and should_stop()):
+            _touch_heartbeat(heartbeat_path)
             message = consumer.poll(poll_timeout)
             if message is None:
                 continue

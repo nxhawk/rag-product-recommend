@@ -1,9 +1,12 @@
 """Helpers - Các hàm tiện ích chung."""
+
 import json
+import logging
 import os
 import re
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 
 def load_json(filepath: str) -> Any:
@@ -173,3 +176,48 @@ def retry_delay_seconds(exc: Exception, default: float = 60.0) -> float:
     if match:
         return float(match.group(1)) + 1.0
     return default
+
+
+# -- Startup dependency wait (shared by DB / ES clients) ---------------------
+
+_T = TypeVar("_T")
+
+
+def retry_with_backoff(
+    func: Callable[[], _T],
+    *,
+    retry_on: tuple[type[Exception], ...],
+    max_attempts: int = 30,
+    base_delay: float = 1.0,
+    max_delay: float = 5.0,
+    logger: logging.Logger | None = None,
+    description: str = "operation",
+    sleep: Callable[[float], None] = time.sleep,
+) -> _T:
+    """Call ``func`` and retry on ``retry_on`` with exponential backoff.
+
+    Lets a worker wait for a slow dependency (Postgres, Elasticsearch) to come
+    up at startup instead of crashing on the first connection refusal. Waits
+    ``min(base_delay * 2**(n-1), max_delay)`` seconds between attempts and
+    re-raises the last exception once ``max_attempts`` is exhausted. ``sleep`` is
+    injectable so tests run without real delays.
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return func()
+        except retry_on as exc:
+            if attempt >= max_attempts:
+                raise
+            delay = min(base_delay * 2 ** (attempt - 1), max_delay)
+            if logger is not None:
+                logger.warning(
+                    "%s not ready (attempt %d/%d): %s - retrying in %.1fs",
+                    description,
+                    attempt,
+                    max_attempts,
+                    exc,
+                    delay,
+                )
+            sleep(delay)
+    # The loop always returns or raises; this satisfies type checkers.
+    raise AssertionError("retry_with_backoff exhausted without raising")  # pragma: no cover

@@ -86,7 +86,7 @@ def main() -> None:
         config.products_topic,
         bootstrap,
     )
-    run_loop(consumer, handler)
+    run_loop(consumer, handler, heartbeat_path=os.getenv("WORKER_HEARTBEAT_FILE"))
 
 
 if __name__ == "__main__":

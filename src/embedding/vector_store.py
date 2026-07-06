@@ -2,10 +2,16 @@
 Vector Store - Manage connection and operations with the vector database.
 Backend: PostgreSQL + pgvector (cosine similarity).
 """
+
 import json
+import logging
 import os
 import re
 from typing import Any, Optional
+
+from src.utils.helpers import retry_with_backoff
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_DSN = "postgresql://postgres:postgres@localhost:5432/rag_products"
 
@@ -43,7 +49,16 @@ class VectorStore:
 
         dsn = kwargs.get("dsn") or os.getenv("DATABASE_URL", DEFAULT_DSN)
         connect_timeout = kwargs.get("connect_timeout", 5)
-        self.conn = psycopg.connect(dsn, autocommit=True, connect_timeout=connect_timeout)
+        # Wait for Postgres to be reachable instead of crashing on the first
+        # refusal - the worker may start before the DB finishes booting.
+        self.conn = retry_with_backoff(
+            lambda: psycopg.connect(dsn, autocommit=True, connect_timeout=connect_timeout),
+            retry_on=(psycopg.OperationalError,),
+            max_attempts=kwargs.get("connect_max_attempts", 30),
+            base_delay=kwargs.get("connect_base_delay", 1.0),
+            logger=logger,
+            description="Postgres",
+        )
         self.conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
         register_vector(self.conn)
         self.conn.execute(
@@ -84,9 +99,7 @@ class VectorStore:
                 """,
                 [
                     (doc_id, doc, json.dumps(meta, ensure_ascii=False), str(emb))
-                    for doc_id, doc, meta, emb in zip(
-                        ids, documents, metadatas, embeddings
-                    )
+                    for doc_id, doc, meta, emb in zip(ids, documents, metadatas, embeddings)
                 ],
             )
 
