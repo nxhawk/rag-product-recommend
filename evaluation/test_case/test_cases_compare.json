@@ -1,0 +1,16 @@
+[
+  {
+    "id": "cmp_01",
+    "type": "compare",
+    "query": "So sánh iPhone 15 Pro Max và Samsung Galaxy S24 Ultra",
+    "expected_products": ["iPhone 15 Pro Max", "Samsung Galaxy S24 Ultra"],
+    "expected_criteria": ["camera", "processor", "battery", "price"]
+  },
+  {
+    "id": "cmp_02",
+    "type": "compare",
+    "query": "So sánh MacBook Air M3 và Dell XPS 13 cho công việc văn phòng",
+    "expected_products": ["MacBook Air M3", "Dell XPS 13"],
+    "expected_criteria": ["performance", "battery", "display", "price"]
+  }
+]

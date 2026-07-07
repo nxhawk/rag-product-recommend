@@ -193,7 +193,7 @@ Hai pipeline chính:
 
 ## Phase 9: Evaluation & Testing ✅
 
-- [x] `evaluation/test_cases.json` — Bộ test case
+- [x] `evaluation/test_case/test_cases_recommend.json`, `evaluation/test_case/test_cases_compare.json` — Bộ test case
 - [x] `evaluation/eval_recommend.py`, `evaluation/eval_compare.py`
 - [x] Unit tests: `tests/unit/test_chunker.py`, `test_filter_engine.py`, `test_router.py` (+ `tests/test_crawler.py`)
 - [x] `tests/conftest.py` — fixtures dùng chung; `tests/integration/` sẵn khung

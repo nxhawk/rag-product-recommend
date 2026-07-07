@@ -1,0 +1,34 @@
+[
+  {
+    "id": "rec_01",
+    "type": "recommend",
+    "query": "Tôi muốn mua điện thoại chụp ảnh đẹp, tầm 15 triệu",
+    "expected_category": "smartphone",
+    "expected_price_range": [12000000, 18000000],
+    "expected_features": ["camera"]
+  },
+  {
+    "id": "rec_02",
+    "type": "recommend",
+    "query": "Laptop cho sinh viên học IT, dưới 20 triệu",
+    "expected_category": "laptop",
+    "expected_price_range": [0, 20000000],
+    "expected_features": ["performance", "storage"]
+  },
+  {
+    "id": "rec_03",
+    "type": "recommend",
+    "query": "Điện thoại chơi game mượt, pin trâu, tầm 10 triệu",
+    "expected_category": "smartphone",
+    "expected_price_range": [8000000, 12000000],
+    "expected_features": ["gaming", "battery"]
+  },
+  {
+    "id": "rec_04",
+    "type": "recommend",
+    "query": "Máy tính bảng học online và giải trí cho học sinh, dưới 8 triệu",
+    "expected_category": "tablet",
+    "expected_price_range": [0, 8000000],
+    "expected_features": ["display", "battery"]
+  }
+]

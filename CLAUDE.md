@@ -116,7 +116,9 @@ rag-product-recommend/
 ├── evaluation/                 # RAG quality evaluation
 │   ├── eval_recommend.py
 │   ├── eval_compare.py
-│   └── test_cases.json
+│   └── test_case/
+│       ├── test_cases_recommend.json
+│       └── test_cases_compare.json
 │
 ├── scripts/                    # CLI scripts
 │   ├── crawl.py                #   Crawl raw data into data/raw/crawled

@@ -257,13 +257,14 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 ## `evaluation/` — Đánh giá chất lượng RAG
 
-**Mục đích:** Đo lường chất lượng retrieval và generation. Chạy offline để benchmark các thay đổi.
+**Mục đích:** Đo lường chất lượng retrieval và generation dựa trên pipeline thật (embedder + vector store + LLM). Chạy thủ công để benchmark các thay đổi — các script này chủ đích không nằm trong bộ pytest (xem `TEST_PLAN.md`), vì cần LLM/DB thật thay vì mock.
 
 | File | Mục đích | Khi nào thêm/cập nhật |
 | ---- | ------- | ------------------- |
-| `eval_recommend.py` | Đánh giá pipeline gợi ý (retrieval recall, độ chính xác xếp hạng, chất lượng phản hồi) | Khi đổi logic retrieval hoặc scoring — chạy trước/sau để so sánh |
-| `eval_compare.py` | Đánh giá pipeline so sánh (độ chính xác đối chiếu thông số, chất lượng phân tích) | Khi đổi logic so sánh |
-| `test_cases.json` | Test case ground-truth với kết quả kỳ vọng | Khi thêm danh mục sản phẩm mới hoặc edge case mới |
+| `eval_recommend.py` | `RecommendEvaluator` chạy từng case `type: "recommend"` qua `RecommendPipeline` thật và chấm 4 metric — `relevance`, `budget_fit`, `intent_recall`, `faithfulness` (xem chi tiết ở [Đánh giá](../development/testing.vi.md#danh-gia-evaluation)) | Khi đổi logic retrieval, scoring, hoặc prompt gợi ý — chạy trước/sau để so sánh |
+| `eval_compare.py` | Đánh giá pipeline so sánh (độ chính xác đối chiếu thông số, chất lượng phân tích) — hiện vẫn là TODO stub, chưa nối với `ComparePipeline` | Khi implement/đổi logic so sánh |
+| `test_case/test_cases_recommend.json` | Test case ground-truth cho recommend với kết quả kỳ vọng (`expected_category`, `expected_price_range`, `expected_features`) | Khi thêm danh mục sản phẩm mới hoặc edge case mới |
+| `test_case/test_cases_compare.json` | Test case ground-truth cho compare với kết quả kỳ vọng (`expected_products`, `expected_criteria`) | Khi thêm kịch bản so sánh mới |
 
 **Khi nào thêm file mới:** Khi tạo một metric đánh giá mới (vd: `eval_latency.py`) hoặc một pipeline mới cần đánh giá.
 

@@ -257,13 +257,14 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 ## `evaluation/` — RAG Quality Evaluation
 
-**Purpose:** Measure retrieval and generation quality. Run offline to benchmark changes.
+**Purpose:** Measure retrieval and generation quality against the real pipeline (embedder + vector store + LLM). Run manually to benchmark changes — these scripts are intentionally excluded from the pytest suite (see `TEST_PLAN.md`), since they need a real LLM/DB rather than mocks.
 
 | File | Purpose | When to add/update |
 | ---- | ------- | ------------------- |
-| `eval_recommend.py` | Evaluate recommendation pipeline (retrieval recall, ranking accuracy, response quality) | When changing retrieval or scoring logic — run before/after to compare |
-| `eval_compare.py` | Evaluate comparison pipeline (spec alignment accuracy, analysis quality) | When changing comparison logic |
-| `test_cases.json` | Ground-truth test cases with expected results | When adding new product categories or edge cases |
+| `eval_recommend.py` | `RecommendEvaluator` runs each `type: "recommend"` case through the live `RecommendPipeline` and scores 4 metrics — `relevance`, `budget_fit`, `intent_recall`, `faithfulness` (see [Evaluation](../development/testing.md#evaluation) for details) | When changing retrieval, scoring, or the recommend prompt — run before/after to compare |
+| `eval_compare.py` | Evaluate comparison pipeline (spec alignment accuracy, analysis quality) — currently a TODO stub, not wired to `ComparePipeline` yet | When implementing/changing comparison logic |
+| `test_case/test_cases_recommend.json` | Ground-truth recommend cases with expected results (`expected_category`, `expected_price_range`, `expected_features`) | When adding new product categories or edge cases |
+| `test_case/test_cases_compare.json` | Ground-truth compare cases with expected results (`expected_products`, `expected_criteria`) | When adding new comparison scenarios |
 
 **When to add a new file:** When creating a new evaluation metric (e.g., `eval_latency.py`) or a new pipeline to evaluate.
 
