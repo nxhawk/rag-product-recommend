@@ -119,7 +119,9 @@ class ComparePipeline:
             product_context=product_context,
             comparison_table=table_md,
         )
-        llm_response = self.llm_client.generate(prompt, system_prompt=SYSTEM_PROMPT)
+        llm_response = self.llm_client.generate(
+            prompt, system_prompt=SYSTEM_PROMPT, json_output=True
+        )
 
         # Step 4: Output guardrail - schema validation, then grounding.
         analysis = self._guarded_output(llm_response, products, warnings)
@@ -149,7 +151,9 @@ class ComparePipeline:
 
         payload = output_result.sanitized_payload or {}
         raw_items = payload.get("product_analysis", [])
-        grounded_items, ground_warnings = ground_compare_analysis(raw_items, products)
+        grounded_items, ground_warnings = ground_compare_analysis(
+            raw_items, products, self.guardrail_config
+        )
         if ground_warnings:
             log_guardrail_event(
                 logger,

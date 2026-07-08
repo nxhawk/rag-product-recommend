@@ -136,7 +136,9 @@ class RecommendPipeline:
 
         payload = output_result.sanitized_payload or {}
         raw_items = payload.get("recommendations", [])
-        grounded_items, ground_warnings = ground_recommendations(raw_items, retrieved_products)
+        grounded_items, ground_warnings = ground_recommendations(
+            raw_items, retrieved_products, self.guardrail_config
+        )
         if ground_warnings:
             log_guardrail_event(
                 logger,

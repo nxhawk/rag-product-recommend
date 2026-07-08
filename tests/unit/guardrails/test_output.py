@@ -70,6 +70,32 @@ def test_ground_recommendations_case_and_whitespace_insensitive():
     assert not warnings
 
 
+def test_ground_recommendations_tolerates_dropped_prefix_and_suffix():
+    # Regression: the LLM commonly drops a leading category word or a
+    # trailing "| Chính hãng ..." suffix while otherwise copying the name
+    # verbatim. An exact-only comparison used to drop every item in this
+    # situation and always fall back (see GUARDRAIL_PLAN.md).
+    items = [
+        {"name": "Xiaomi 17T 5G 12GB/256GB"},
+        {"name": "iPhone 15 128GB"},
+    ]
+    retrieved = [
+        {"metadata": {"name": "Điện thoại Xiaomi 17T 5G 12GB/256GB"}},
+        {"metadata": {"name": "iPhone 15 128GB | Chính hãng VN/A"}},
+    ]
+    grounded, warnings = ground_recommendations(items, retrieved)
+    assert len(grounded) == 2
+    assert not warnings
+
+
+def test_ground_recommendations_still_drops_unrelated_name():
+    items = [{"name": "Samsung Galaxy Z Fold"}]
+    retrieved = [{"metadata": {"name": "iPhone 15 128GB | Chính hãng VN/A"}}]
+    grounded, warnings = ground_recommendations(items, retrieved)
+    assert grounded == []
+    assert warnings
+
+
 def test_ground_compare_analysis_drops_unknown_product():
     items = [{"name": "A"}, {"name": "Z"}]
     products = [{"name": "A"}, {"name": "B"}]

@@ -176,6 +176,16 @@ class GeminiProvider(BaseLLMProvider):
             # Native JSON mode: no prose preamble/markdown fences, so the
             # response parses reliably and fits within max_output_tokens.
             config_kwargs["response_mime_type"] = "application/json"
+        if "pro" not in self.model:
+            # gemini-2.5-flash/flash-lite think by default, and thinking
+            # tokens are drawn from the SAME max_output_tokens budget as the
+            # final answer. For a structured-output task like this, letting
+            # the model "think" can silently exhaust the budget before it
+            # writes any JSON, producing an empty/truncated response that
+            # fails the output guardrail on every call. Disable thinking so
+            # the full budget goes to the actual completion. gemini-2.5-pro
+            # does not support thinking_budget=0, so it is left untouched.
+            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
         response = self.client.models.generate_content(
             model=self.model,
             contents=full_prompt,

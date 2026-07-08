@@ -22,7 +22,10 @@ Bảng thông số đã căn chỉnh:
 Hãy so sánh chi tiết các sản phẩm trên:
 1. So sánh từng tiêu chí quan trọng
 2. Xác định sản phẩm tốt hơn ở từng tiêu chí
-3. Ưu/nhược điểm nổi bật của từng sản phẩm
+3. Ưu/nhược điểm nổi bật của từng sản phẩm — trường "name" trong
+   "product_analysis" PHẢI copy chính xác, nguyên văn (giữ nguyên từng ký
+   tự) tên sản phẩm từ dữ liệu phía trên, không dịch, không viết tắt,
+   không diễn giải lại
 4. Kết luận: nên chọn sản phẩm nào và trong trường hợp nào
 
 Trả về JSON format:

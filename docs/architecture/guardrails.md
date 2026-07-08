@@ -94,11 +94,15 @@ The LLM's raw text is parsed as JSON (reusing `ResponseParser`'s direct + markdo
 
 Any parse failure, missing required field, or wrong type → `block`. **Keep these models in sync** whenever a prompt template's JSON contract changes.
 
-**Source:** `src/guardrails/output/schemas.py`, `src/guardrails/output/validator.py`
+**Gemini "thinking" caveat.** `gemini-2.5-flash`/`flash-lite` reason internally by default, and those thinking tokens are drawn from the *same* `max_output_tokens` budget as the final answer. Left unchecked, thinking can consume the entire budget before the model writes any JSON, producing an empty/truncated response that fails schema validation on essentially every call — this was the root cause of an earlier bug where `/api/recommend` always fell back. `GeminiProvider.generate()` (`src/generation/llm_client.py`) now sets `thinking_config=ThinkingConfig(thinking_budget=0)` for flash/flash-lite models to prevent this. `gemini-2.5-pro` does not support disabling thinking, so it is left untouched — a generous `max_output_tokens` is the only mitigation there.
+
+**Source:** `src/guardrails/output/schemas.py`, `src/guardrails/output/validator.py`, `src/generation/llm_client.py`
 
 ### 3b. Grounding
 
-Even when the JSON is well-formed, the LLM can still *hallucinate* a product name that was never retrieved. `ground_recommendations()` / `ground_compare_analysis()` compare every item's `name` (case/whitespace-insensitive) against the retrieved/compared product list and drop anything that doesn't match, adding a `warnings` entry with the count dropped. If *every* item gets dropped, the pipeline treats it the same as a schema failure and falls back.
+Even when the JSON is well-formed, the LLM can still *hallucinate* a product name that was never retrieved. `ground_recommendations()` / `ground_compare_analysis()` compare every item's `name` against the retrieved/compared product list and drop anything that doesn't match, adding a `warnings` entry with the count dropped. If *every* item gets dropped, the pipeline treats it the same as a schema failure and falls back.
+
+Matching is case/whitespace-insensitive and tolerant of minor rewording, not a raw `==`: prompts ask the LLM to copy `name` verbatim, but models still commonly drop a prefix/suffix (e.g. a leading "Điện thoại " or a trailing "| Chính hãng VN/A") or tweak punctuation. A name is grounded if it (1) matches exactly after normalization, (2) is a substring of - or contains - a known name, gated by `grounding_min_containment_chars` so short fragments like a bare brand name can't match everything, or (3) is a close match per `difflib.SequenceMatcher` at or above `grounding_fuzzy_ratio`. This closed an earlier bug where an exact-only comparison caused the output guardrail to drop *every* recommendation and fall back on essentially every request.
 
 **Source:** `src/guardrails/output/grounding.py`
 
@@ -150,6 +154,8 @@ Every threshold lives in `GuardrailConfig` (`src/guardrails/config.py`) — neve
 | `max_context_field_chars` | `300` | `context/sanitizer.py` |
 | `max_context_products` | `10` | `RecommendPipeline._build_context()` |
 | `max_compare_products` | `5` | `ComparePipeline.run()` |
+| `grounding_min_containment_chars` | `8` | `output/grounding.py` (min length for substring-containment match) |
+| `grounding_fuzzy_ratio` | `0.82` | `output/grounding.py` (`difflib.SequenceMatcher` cutoff) |
 
 Each pipeline accepts an optional `guardrail_config: GuardrailConfig` constructor argument, defaulting to `GuardrailConfig()`.
 
@@ -177,9 +183,10 @@ See [API Endpoints](../api/endpoints.md) for the full error tables per route.
 | Test file | Covers |
 | --------- | ------ |
 | `tests/unit/guardrails/test_input.py` | Normalize / injection / heuristic / chain short-circuiting |
-| `tests/unit/guardrails/test_output.py` | Schema validation, grounding, fallback builders |
+| `tests/unit/guardrails/test_output.py` | Schema validation, grounding (incl. fuzzy-match tolerance), fallback builders |
 | `tests/unit/api/test_schemas.py` | Pydantic request-schema validators |
 | `tests/unit/pipeline/test_recommend_pipeline.py`, `test_compare_pipeline.py` | Full guardrail wiring inside each pipeline (fake engine/LLM client, no DB/network) |
 | `tests/unit/api/routes/test_recommend.py`, `test_compare.py` | `InputGuardrailBlocked` → `422` mapping at the route layer |
+| `tests/unit/generation/test_llm_client_gemini.py` | `GeminiProvider` JSON mode + thinking-budget config (regression test for the "always falls back" bug caused by thinking tokens starving `max_output_tokens`) |
 
 See [Testing](../development/testing.md) for how to run the suite.

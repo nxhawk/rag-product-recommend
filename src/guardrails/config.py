@@ -31,3 +31,12 @@ class GuardrailConfig:
 
     # Compare-specific
     max_compare_products: int = 5
+
+    # Grounding (output/grounding.py): the prompt asks the LLM to copy a
+    # product's `name` verbatim, but models still occasionally drop a
+    # prefix/suffix or tweak punctuation. An exact-match-only comparison
+    # made every recommendation get dropped as "ungrounded" in practice, so
+    # a bounded fuzzy match is allowed before falling back to a deterministic
+    # response. Still rejects genuinely different (hallucinated) names.
+    grounding_min_containment_chars: int = 8  # min length for substring containment
+    grounding_fuzzy_ratio: float = 0.82  # difflib.SequenceMatcher ratio cutoff

@@ -21,8 +21,11 @@ Câu hỏi của khách hàng: {query}
 Danh sách sản phẩm phù hợp (đã xếp hạng):
 {product_context}
 
-Hãy gợi ý TOP {top_k} sản phẩm tốt nhất. Với mỗi sản phẩm:
-1. Tên sản phẩm và giá
+Hãy gợi ý TOP {top_k} sản phẩm tốt nhất, CHỈ chọn trong danh sách sản phẩm ở
+trên. Với mỗi sản phẩm:
+1. Tên sản phẩm và giá — trường "name" PHẢI copy chính xác, nguyên văn
+   (giữ nguyên từng ký tự) từ danh sách sản phẩm phía trên, không dịch,
+   không viết tắt, không diễn giải lại
 2. Lý do gợi ý (tại sao phù hợp với nhu cầu)
 3. Ưu điểm nổi bật
 4. Nhược điểm cần lưu ý
