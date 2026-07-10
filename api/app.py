@@ -1,5 +1,6 @@
 """FastAPI Application - Entry point."""
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -62,7 +63,24 @@ def _validate_required_configs() -> None:
 async def lifespan(app: FastAPI):
     _validate_required_configs()
     logger.info("Startup config check passed (project root: %s)", PROJECT_ROOT)
-    yield
+
+    # Start the internal gRPC server (RecommendService) alongside HTTP. The
+    # gateway talks to this over gRPC; REST stays available for health/metrics
+    # and direct use. Disable with GRPC_ENABLED=false (e.g. in unit tests).
+    grpc_server = None
+    if os.getenv("GRPC_ENABLED", "true").lower() != "false":
+        try:
+            from src.grpc_server.server import serve_in_thread
+
+            grpc_server = serve_in_thread()
+        except Exception:  # noqa: BLE001 - never let gRPC startup break HTTP
+            logger.exception("gRPC server failed to start")
+
+    try:
+        yield
+    finally:
+        if grpc_server is not None:
+            grpc_server.stop(grace=5)
 
 
 app = FastAPI(

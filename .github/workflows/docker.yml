@@ -68,9 +68,21 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile
+          file: Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Notify the meta repo (techscout-platform) that a new image is available
+      # so it can (re)deploy the stack. Requires a PLATFORM_DISPATCH_TOKEN secret
+      # with `repo` scope on techscout-platform.
+      - name: Trigger platform deploy
+        if: github.event_name == 'push'
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.PLATFORM_DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository_owner }}/techscout-platform/dispatches \
+            -d '{"event_type":"service-updated","client_payload":{"service":"rag-recommend","sha":"${{ github.sha }}"}}'

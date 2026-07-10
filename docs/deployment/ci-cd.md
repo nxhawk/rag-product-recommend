@@ -18,7 +18,7 @@ required** to get the security and CI pipelines running.
 | **Bandit** | `bandit.yml` | Push / PR to `main`, weekly | Python security linter |
 | **Trivy** | `trivy.yml` | Push / PR to `main`, weekly | Vulnerability + IaC + image scan |
 | **Dependency Audit** | `pip-audit.yml` | Dependency change, daily | CVE audit of locked dependencies |
-| **Build & Push** | `docker.yml` | Push `main`/tags, PR | Test then build & push image to GHCR |
+| **Build & Push** | `docker.yml` | Push `main`/tags, PR | Test, build & push to GHCR, then trigger platform deploy |
 | **Deploy Docs** | `docs.yml` | Push `main` (docs), manual | Build MkDocs and deploy to GitHub Pages |
 | **Dependabot** | `dependabot.yml` | Scheduled | Automated dependency update PRs |
 
@@ -283,3 +283,11 @@ Actions**.
 **Secrets.** None of the security or CI workflows need custom secrets — they all use the
 automatically provided `GITHUB_TOKEN`. The only optional secret is `GITLEAKS_LICENSE`,
 required **only** if the repository belongs to a GitHub Organization.
+
+## Platform deploy trigger
+
+`docker.yml` builds from the **root `Dockerfile`** (the `docker/` folder moved to
+the `techscout-platform` meta-repo). After pushing the image to GHCR it fires a
+`repository_dispatch` (`event_type: service-updated`) at `techscout-platform`,
+whose `deploy.yml` redeploys the stack. This needs a `PLATFORM_DISPATCH_TOKEN`
+secret (a PAT with `repo` scope on techscout-platform).

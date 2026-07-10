@@ -1,5 +1,24 @@
 # API Endpoints
 
+## gRPC — `RecommendService` (`:50052`)
+
+How the **gateway** calls this service. Contract: `proto/recommend.proto`,
+generated stubs in `src/grpc_gen/` (regen: `bash scripts/gen_proto.sh`). The gRPC
+server starts alongside FastAPI via the lifespan in `api/app.py`; disable with
+`GRPC_ENABLED=false`.
+
+```protobuf
+service RecommendService {
+  rpc Recommend (RecommendRequest) returns (RecommendResponse);
+  rpc Compare   (CompareRequest)   returns (CompareResponse);
+}
+```
+
+The REST endpoints below remain available for direct use / health / metrics.
+
+---
+
+
 Base URL: `http://localhost:8000`
 
 ## Health Check

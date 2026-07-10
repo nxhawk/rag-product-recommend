@@ -111,11 +111,14 @@ uv sync
 #      ENVIRONMENT=development
 #      LOG_LEVEL=INFO
 
-# 4. Start the full stack (API + datastores + CDC pipeline + Kibana + monitoring)
-cd docker && docker compose up --build -d && cd ..
+# 4. Start the full stack — orchestration now lives in the techscout-platform
+#    meta-repo (this repo ships only its own Dockerfile):
+#      cd techscout-platform/docker && docker compose up --build -d
+#    Or run just this service locally (HTTP :8000 + gRPC :50052):
+#      uv run uvicorn api.app:app --reload
 
-# 5. Seed the catalog + search indexes
-docker compose -f docker/docker-compose.yml exec app uv run python scripts/ingest.py
+# 5. Seed the catalog + search indexes (run from techscout-platform/docker)
+docker compose exec rag-recommend uv run python scripts/ingest.py
 #   or: ingest.py --catalog-only  (let the CDC workers build the indexes)
 
 # 6. Try it — API http://localhost:8000, Kibana http://localhost:5601,
@@ -169,6 +172,8 @@ techscout-rag-recommend/
 │   ├── sync/            #   CDC sync workers (Debezium → Elasticsearch / pgvector)
 │   ├── generation/      #   Multi-provider LLM client, prompt templates, guardrails
 │   ├── pipeline/        #   Orchestration: RAG router + recommend/compare pipelines
+│   ├── grpc_server/     #   gRPC RecommendService (started from api/app.py lifespan)
+│   ├── grpc_gen/        #   Generated gRPC stubs
 │   └── utils/           #   Logger, cache, helpers
 │
 ├── api/                 # FastAPI layer
@@ -184,7 +189,8 @@ techscout-rag-recommend/
 │
 ├── configs/             # settings.yaml, crawler.yaml, product_categories.yaml, scoring_weights.yaml
 ├── docs/                # MkDocs Material documentation (EN + VI)
-├── docker/              # Dockerfile, docker-compose.yml (full CDC stack), debezium/ connector config
+├── Dockerfile           # service image (Compose/orchestration now in techscout-platform/docker/)
+├── proto/               # gRPC contract (recommend.proto)
 │
 └── data/
     ├── raw/products/    # Curated sample data (tracked)
@@ -215,8 +221,8 @@ uv run python scripts/sync_worker.py --role embedder    # -> pgvector
 uv sync --group docs
 uv run mkdocs serve
 
-# Docker (full stack)
-cd docker
+# Docker (full stack) — from the techscout-platform meta-repo
+cd ../../docker   # techscout-platform/docker (submodule layout)
 docker compose up --build
 ```
 
@@ -246,3 +252,7 @@ See [PLAN.md](./PLAN.md) for the detailed phase-by-phase roadmap.
 ## License
 
 MIT
+
+## gRPC (RecommendService)
+
+Ngoài REST, service chạy thêm gRPC server (mặc định `:50052`, tắt bằng `GRPC_ENABLED=false`) để gateway gọi nội bộ. Contract: `proto/recommend.proto`, stub trong `src/grpc_gen/` (regenerate: `bash scripts/gen_proto.sh`). gRPC khởi động cùng FastAPI qua lifespan trong `api/app.py`.

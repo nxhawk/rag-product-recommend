@@ -33,7 +33,7 @@ jobs:
       # Resolve the exact locked versions into a requirements file, then audit
       # against the Python Packaging Advisory Database (PyPI + OSV).
       - name: Export locked requirements
-        run: uv export --frozen --format requirements-txt --no-emit-project --all-groups -o requirements.txt
+        run: uv export --format requirements-txt --no-emit-project --all-groups -o requirements.txt
 
       # PYSEC-2026-311 (chromadb): no fix released; chromadb is a leftover, unused
       # dependency (project uses pgvector, no `import chromadb` anywhere). Interim

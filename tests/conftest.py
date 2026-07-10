@@ -1,4 +1,10 @@
 """Shared test fixtures."""
+
+import os
+
+# Do not start the internal gRPC server during unit tests.
+os.environ.setdefault("GRPC_ENABLED", "false")
+
 import pytest
 
 

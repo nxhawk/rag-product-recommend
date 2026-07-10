@@ -1,5 +1,23 @@
 # API Endpoints
 
+## gRPC — `RecommendService` (`:50052`)
+
+Cách **gateway** gọi service này. Hợp đồng: `proto/recommend.proto`, stub sinh
+sẵn trong `src/grpc_gen/` (regen: `bash scripts/gen_proto.sh`). gRPC server khởi
+động cùng FastAPI qua lifespan trong `api/app.py`; tắt bằng `GRPC_ENABLED=false`.
+
+```protobuf
+service RecommendService {
+  rpc Recommend (RecommendRequest) returns (RecommendResponse);
+  rpc Compare   (CompareRequest)   returns (CompareResponse);
+}
+```
+
+Các endpoint REST bên dưới vẫn dùng được để gọi trực tiếp / health / metrics.
+
+---
+
+
 Base URL: `http://localhost:8000`
 
 ## Health Check

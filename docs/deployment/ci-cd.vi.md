@@ -270,3 +270,11 @@ không cần token thủ công. Chỉnh mức hiển thị package ở phần **
 **Secrets.** Không workflow bảo mật hay CI nào cần secret tùy chỉnh — tất cả dùng
 `GITHUB_TOKEN` được cấp tự động. Secret tùy chọn duy nhất là `GITLEAKS_LICENSE`, **chỉ**
 cần nếu repo thuộc một GitHub Organization.
+
+## Trigger deploy về platform
+
+`docker.yml` build từ **`Dockerfile` ở gốc** (thư mục `docker/` đã chuyển sang
+meta-repo `techscout-platform`). Sau khi push image lên GHCR, nó gửi
+`repository_dispatch` (`event_type: service-updated`) tới `techscout-platform`,
+và `deploy.yml` ở đó redeploy stack. Cần secret `PLATFORM_DISPATCH_TOKEN` (PAT có
+scope `repo` trên techscout-platform).

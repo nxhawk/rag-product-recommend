@@ -25,9 +25,9 @@ updates:
       - "dependencies"
       - "github-actions"
 
-  # Base image in docker/Dockerfile
+  # Base image in the root Dockerfile
   - package-ecosystem: "docker"
-    directory: "/docker"
+    directory: "/"
     schedule:
       interval: "monthly"
     labels:

@@ -1,5 +1,15 @@
 # Triển khai với Docker
 
+!!! info "Orchestration nằm ở repo platform"
+    Trang này mô tả toàn bộ stack Docker / Compose — hiện đã chuyển sang meta-repo
+    **techscout-platform** trong thư mục `docker/`, không còn ở repo service này.
+    Repo này chỉ chứa `Dockerfile` ở gốc. Chạy các lệnh `cd docker` /
+    `docker compose ...` bên dưới từ `techscout-platform/docker/`, nơi chứa
+    `compose.core.yml`, `compose.search.yml`, `compose.cdc.yml`,
+    `compose.monitoring.yml` và cấu hình Prometheus / Grafana / Debezium
+    (build context trỏ về `../services/rag-recommend`). Trong stack platform,
+    **Kafka UI ở `:8090`** (gateway giữ host `:8080`).
+
 Repository cung cấp một stack **Docker Compose** đầy đủ, chạy toàn bộ kiến trúc
 CDC chỉ với một lệnh: API, cả hai datastore (Postgres + pgvector và
 Elasticsearch), pipeline change-data-capture Kafka + Debezium, hai sync worker,
@@ -23,7 +33,7 @@ CDC lan truyền tới hai index tìm kiếm dẫn xuất.
 flowchart LR
     U["localhost:8000\nAPI"] --> APP["app\n(FastAPI)"]
     KB["localhost:5601\nKibana"] --> ES
-    KUI["localhost:8080\nKafka UI"] --> KF
+    KUI["localhost:8090\nKafka UI"] --> KF
     KUI --> CN
 
     APP -->|"ghi CRUD"| PG[("postgres\nproduct_catalog + products/pgvector")]
@@ -145,7 +155,7 @@ check (xem bên dưới), và `connect-init` đăng ký Debezium connector khi m
 | **elasticsearch** | `docker.elastic.co/elasticsearch/elasticsearch:8.14.3` | `9200` | — | Index keyword/BM25 `product_chunks` (đã tắt security, single-node) |
 | **kibana** | `docker.elastic.co/kibana/kibana:8.14.3` | `5601` | elasticsearch | Web UI để xem/query Elasticsearch |
 | **kafka** | `apache/kafka:3.7.2` | — (`9092` nội bộ) | — | Event stream, single-node KRaft (không ZooKeeper) |
-| **kafka-ui** | `kafbat/kafka-ui:v1.4.2` | `8080` | kafka, connect | Web UI xem topic/message Kafka, consumer lag và Debezium connector |
+| **kafka-ui** | `kafbat/kafka-ui:v1.4.2` | `8090` | kafka, connect | Web UI xem topic/message Kafka, consumer lag và Debezium connector |
 | **connect** | `debezium/connect:2.7.3.Final` | `8083` | kafka, postgres | Kafka Connect chạy Debezium Postgres connector |
 | **connect-init** | `curlimages/curl:8.8.0` | — | connect | One-shot: `PUT` cấu hình connector từ `docker/debezium/` rồi thoát |
 | **indexer-worker** | build từ `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch; chờ ES lúc khởi động, healthcheck bằng heartbeat |
@@ -209,7 +219,7 @@ curl "http://localhost:9200/product_chunks/_count?pretty"
 ```
 
 API ở `http://localhost:8000` (docs tương tác ở `http://localhost:8000/docs`);
-Kibana ở `http://localhost:5601`; Kafka UI ở `http://localhost:8080`.
+Kibana ở `http://localhost:5601`; Kafka UI ở `http://localhost:8090`.
 
 ---
 
@@ -337,7 +347,7 @@ docker compose exec postgres psql -U postgres -d rag_products \
 ### Kafka — Kafka UI
 
 Muốn xem topic, message trực tiếp, consumer-group lag và Debezium connector theo
-kiểu bấm-chuột, mở **[Kafka UI](kafka-ui.vi.md)** ở `http://localhost:8080` (không
+kiểu bấm-chuột, mở **[Kafka UI](kafka-ui.vi.md)** ở `http://localhost:8090` (không
 cần đăng nhập). Đây là "Kibana cho Kafka" trong stack này — xem trang riêng để có
 hướng dẫn chi tiết.
 
@@ -404,7 +414,7 @@ Gemini). Hỗ trợ nhiều key để xoay vòng (`GEMINI_API_KEY=key_a,key_b`).
 | --------- | ------- | ------- |
 | `8000` | app | REST API + Swagger UI |
 | `5601` | kibana | UI Elasticsearch |
-| `8080` | kafka-ui | Kafka UI (topic, message, consumer lag, connector) |
+| `8090` | kafka-ui | Kafka UI (topic, message, consumer lag, connector) |
 | `9200` | elasticsearch | REST API của ES |
 | `5432` | postgres | Truy cập SQL (psql / DBeaver) |
 | `8083` | connect | REST Kafka Connect / Debezium |
@@ -529,7 +539,7 @@ docker compose -f docker-compose.prod.yml exec app uv run python scripts/ingest.
 | Một worker cứ restart ngay sau khi khởi động | Nó không nối được datastore. Worker giờ retry với backoff nên sẽ tự lành khi Postgres/Elasticsearch lên; nếu vẫn lặp thì dependency thực sự đang down hoặc khác network — xem `docker compose ps` và log service đó. |
 | Container Elasticsearch cứ restart | Thiếu bộ nhớ. Nó bị ghim `-Xms512m -Xmx512m`; cấp thêm RAM cho Docker hoặc giảm `ES_JAVA_OPTS`. |
 | Kafka UI không thấy cluster / báo "offline" | Broker chưa sẵn sàng lúc khởi động, hoặc `KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS` sai. Xem `docker compose logs kafka-ui` và kiểm tra `kafka` đã healthy chưa. |
-| Cổng đã bị chiếm | Tiến trình khác đang giữ `8000/5432/9200/5601/8080/8083/6379`. Dừng nó hoặc đổi mapping `ports:`. |
+| Cổng đã bị chiếm | Tiến trình khác đang giữ `8000/5432/9200/5601/8090/8083/6379`. Dừng nó hoặc đổi mapping `ports:`. |
 
 ---
 

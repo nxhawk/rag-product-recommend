@@ -1,5 +1,15 @@
 # Docker Deployment
 
+!!! info "Orchestration lives in the platform repo"
+    This page documents the full Docker / Compose stack, which now lives in the
+    **techscout-platform** meta-repo under `docker/` — not in this service repo.
+    This repo ships only its own root `Dockerfile`. Run the `cd docker` /
+    `docker compose ...` commands below from `techscout-platform/docker/`, where
+    `compose.core.yml`, `compose.search.yml`, `compose.cdc.yml`,
+    `compose.monitoring.yml` and the Prometheus / Grafana / Debezium config now
+    live (build contexts point at `../services/rag-recommend`). In the platform
+    stack, **Kafka UI is on `:8090`** (the gateway owns host `:8080`).
+
 The repository ships a full **Docker Compose** stack that runs the entire CDC
 architecture with a single command: the API, both datastores (Postgres +
 pgvector and Elasticsearch), the Kafka + Debezium change-data-capture pipeline,
@@ -24,7 +34,7 @@ indexes by the CDC pipeline.
 flowchart LR
     U["localhost:8000\nAPI"] --> APP["app\n(FastAPI)"]
     KB["localhost:5601\nKibana"] --> ES
-    KUI["localhost:8080\nKafka UI"] --> KF
+    KUI["localhost:8090\nKafka UI"] --> KF
     KUI --> CN
 
     APP -->|"CRUD write"| PG[("postgres\nproduct_catalog + products/pgvector")]
@@ -148,7 +158,7 @@ connector once everything is ready.
 | **elasticsearch** | `docker.elastic.co/elasticsearch/elasticsearch:8.14.3` | `9200` | — | Keyword/BM25 index `product_chunks` (security disabled, single-node) |
 | **kibana** | `docker.elastic.co/kibana/kibana:8.14.3` | `5601` | elasticsearch | Web UI to browse/query Elasticsearch |
 | **kafka** | `apache/kafka:3.7.2` | — (internal `9092`) | — | Event stream, single-node KRaft (no ZooKeeper) |
-| **kafka-ui** | `kafbat/kafka-ui:v1.4.2` | `8080` | kafka, connect | Web UI to browse Kafka topics/messages, consumer lag and the Debezium connector |
+| **kafka-ui** | `kafbat/kafka-ui:v1.4.2` | `8090` | kafka, connect | Web UI to browse Kafka topics/messages, consumer lag and the Debezium connector |
 | **connect** | `debezium/connect:2.7.3.Final` | `8083` | kafka, postgres | Kafka Connect running the Debezium Postgres connector |
 | **connect-init** | `curlimages/curl:8.8.0` | — | connect | One-shot: `PUT`s the connector config from `docker/debezium/`, then exits |
 | **indexer-worker** | built from `docker/Dockerfile` | — | kafka, elasticsearch | `sync_worker.py --role indexer` → Elasticsearch; waits for ES at startup, heartbeat healthcheck |
@@ -213,7 +223,7 @@ curl "http://localhost:9200/product_chunks/_count?pretty"
 
 The API is at `http://localhost:8000` (interactive docs at
 `http://localhost:8000/docs`); Kibana is at `http://localhost:5601`; Kafka UI is
-at `http://localhost:8080`.
+at `http://localhost:8090`.
 
 ---
 
@@ -343,7 +353,7 @@ docker compose exec postgres psql -U postgres -d rag_products \
 ### Kafka — Kafka UI
 
 For a point-and-click view of topics, live messages, consumer-group lag and the
-Debezium connector, open **[Kafka UI](kafka-ui.md)** at `http://localhost:8080`
+Debezium connector, open **[Kafka UI](kafka-ui.md)** at `http://localhost:8090`
 (no login). It's the "Kibana for Kafka" in this stack — see the dedicated page
 for a walkthrough.
 
@@ -412,7 +422,7 @@ Compose stack the infra variables are set for you.
 | --------- | ------- | --- |
 | `8000` | app | REST API + Swagger UI |
 | `5601` | kibana | Elasticsearch UI |
-| `8080` | kafka-ui | Kafka UI (topics, messages, consumer lag, connector) |
+| `8090` | kafka-ui | Kafka UI (topics, messages, consumer lag, connector) |
 | `9200` | elasticsearch | ES REST API |
 | `5432` | postgres | SQL access (psql / DBeaver) |
 | `8083` | connect | Kafka Connect / Debezium REST |
@@ -538,7 +548,7 @@ docker compose -f docker-compose.prod.yml exec app uv run python scripts/ingest.
 | A worker keeps restarting right after startup | It can't reach its datastore. The workers now retry with backoff, so this self-heals once Postgres/Elasticsearch is up; if it persists, the dependency is genuinely down or on another network — check `docker compose ps` and that service's logs. |
 | Elasticsearch container keeps restarting | Not enough memory. It's pinned to `-Xms512m -Xmx512m`; give Docker more RAM or lower `ES_JAVA_OPTS`. |
 | Kafka UI shows no cluster / "offline" | The broker wasn't ready when it started, or `KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS` is wrong. Check `docker compose logs kafka-ui` and that `kafka` is healthy. |
-| Port already in use | Another process holds `8000/5432/9200/5601/8080/8083/6379`. Stop it or remap the `ports:` entry. |
+| Port already in use | Another process holds `8000/5432/9200/5601/8090/8083/6379`. Stop it or remap the `ports:` entry. |
 
 ---
 
