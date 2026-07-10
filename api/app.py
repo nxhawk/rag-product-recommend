@@ -54,7 +54,7 @@ def _validate_required_configs() -> None:
         f"Project root: {PROJECT_ROOT}\n"
         f"Current working directory: {Path.cwd()}\n"
         "Run uvicorn from the repository root, for example:\n"
-        "  cd /path/to/rag-product-recommend && uv run uvicorn api.app:app --reload"
+        "  cd /path/to/techscout-rag-recommend && uv run uvicorn api.app:app --reload"
     )
 
 

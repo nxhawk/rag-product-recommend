@@ -107,7 +107,7 @@ classDiagram
 
 ```yaml
 # ---- CrawlerConfig (global) ----
-user_agent: "Mozilla/5.0 (compatible; RagProductBot/0.1; +https://.../rag-product-recommend)"
+user_agent: "Mozilla/5.0 (compatible; RagProductBot/0.1; +https://.../techscout-rag-recommend)"
 timeout: 20.0             # per-request timeout (seconds)
 max_retries: 3            # retry attempts on transient errors
 retry_backoff: 1.5        # exponential backoff multiplier between retries

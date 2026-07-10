@@ -26,8 +26,8 @@ Hướng dẫn này giúp bạn thiết lập dự án để phát triển cục
 ## Clone & Cài đặt
 
 ```bash
-git clone https://github.com/nxhawk/rag-product-recommend.git
-cd rag-product-recommend
+git clone https://github.com/nxhawk/techscout-rag-recommend.git
+cd techscout-rag-recommend
 
 # Cài đặt toàn bộ dependencies (bao gồm nhóm dev + docs)
 uv sync --group dev --group docs
@@ -218,7 +218,7 @@ Xem [hướng dẫn triển khai Docker](../deployment/docker.vi.md) để biế
 ### Chỉ Build Image
 
 ```bash
-docker build -f docker/Dockerfile -t rag-product-recommend .
+docker build -f docker/Dockerfile -t techscout-rag-recommend .
 ```
 
 ## Chạy Docs cục bộ

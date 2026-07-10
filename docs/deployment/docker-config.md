@@ -103,7 +103,7 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    stack: rag-product-recommend
+    stack: techscout-rag-recommend
 
 scrape_configs:
   - job_name: prometheus
@@ -120,7 +120,7 @@ scrape_configs:
 | --- | ------- |
 | `global.scrape_interval` | How often every target is scraped (15s). Each scrape stores one sample per series. |
 | `global.evaluation_interval` | How often alerting/recording rules are evaluated (none defined yet, but the cadence is set). |
-| `global.external_labels` | Labels attached to **all** series leaving this Prometheus (`stack="rag-product-recommend"`). Useful when federating or comparing multiple stacks. |
+| `global.external_labels` | Labels attached to **all** series leaving this Prometheus (`stack="techscout-rag-recommend"`). Useful when federating or comparing multiple stacks. |
 | `scrape_configs[].job_name` | Logical name for a group of targets; becomes the `job` label on every metric (`job="rag-api"`, …). |
 | `scrape_configs[].metrics_path` | Path to scrape. Defaults to `/metrics`; set explicitly for `rag-api` for clarity. |
 | `scrape_configs[].static_configs[].targets` | `host:port` list. Hosts are **Compose service names** (`app`, `postgres-exporter`, …) resolved on the Docker network. |

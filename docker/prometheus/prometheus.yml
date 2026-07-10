@@ -11,7 +11,7 @@ global:
   scrape_interval: 15s # how often to pull each target
   evaluation_interval: 15s # how often to evaluate alerting/recording rules
   external_labels:
-    stack: rag-product-recommend
+    stack: techscout-rag-recommend
 
 scrape_configs:
   # Prometheus scraping itself - a cheap liveness signal for the scraper.

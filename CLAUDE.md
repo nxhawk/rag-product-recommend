@@ -27,7 +27,7 @@ Two main pipelines:
 ## Project Structure
 
 ```
-rag-product-recommend/
+techscout-rag-recommend/
 ├── pyproject.toml              # Dependencies & project metadata
 ├── uv.lock                     # Lockfile
 │

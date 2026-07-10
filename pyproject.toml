@@ -1,5 +1,5 @@
 [project]
-name = "rag-product-recommend"
+name = "techscout-rag-recommend"
 version = "0.1.0"
 description = "RAG-based product recommendation system"
 readme = "README.md"

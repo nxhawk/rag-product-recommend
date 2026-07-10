@@ -2,7 +2,7 @@
 # Loaded by src/crawler/config.py -> CrawlerConfig.from_yaml()
 
 # HTTP client
-user_agent: "Mozilla/5.0 (compatible; RagProductBot/0.1; +https://github.com/nxhawk/rag-product-recommend)"
+user_agent: "Mozilla/5.0 (compatible; RagProductBot/0.1; +https://github.com/nxhawk/techscout-rag-recommend)"
 timeout: 20.0
 max_retries: 3
 retry_backoff: 1.5

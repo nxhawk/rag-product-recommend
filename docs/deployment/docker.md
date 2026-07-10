@@ -453,22 +453,22 @@ Registry.
 
 | Tag | Description | Example |
 | --- | ----------- | ------- |
-| `main` | Latest commit on `main` | `ghcr.io/nxhawk/rag-product-recommend:main` |
-| `v*.*.*` | Semantic version release | `ghcr.io/nxhawk/rag-product-recommend:v1.0.0` |
-| `v*.*` | Major.minor (rolling) | `ghcr.io/nxhawk/rag-product-recommend:v1.0` |
-| `<sha>` | Specific commit SHA | `ghcr.io/nxhawk/rag-product-recommend:a1b2c3d` |
+| `main` | Latest commit on `main` | `ghcr.io/nxhawk/techscout-rag-recommend:main` |
+| `v*.*.*` | Semantic version release | `ghcr.io/nxhawk/techscout-rag-recommend:v1.0.0` |
+| `v*.*` | Major.minor (rolling) | `ghcr.io/nxhawk/techscout-rag-recommend:v1.0` |
+| `<sha>` | Specific commit SHA | `ghcr.io/nxhawk/techscout-rag-recommend:a1b2c3d` |
 
 ### Pull & run
 
 ```bash
-docker pull ghcr.io/nxhawk/rag-product-recommend:main
+docker pull ghcr.io/nxhawk/techscout-rag-recommend:main
 
 docker run -d \
   --name rag-api \
   -p 8000:8000 \
   --env-file .env \
   -v $(pwd)/data:/app/data \
-  ghcr.io/nxhawk/rag-product-recommend:main
+  ghcr.io/nxhawk/techscout-rag-recommend:main
 ```
 
 ### Minimal Compose (app + Postgres + Redis)
@@ -476,7 +476,7 @@ docker run -d \
 ```yaml
 services:
   app:
-    image: ghcr.io/nxhawk/rag-product-recommend:main
+    image: ghcr.io/nxhawk/techscout-rag-recommend:main
     ports:
       - "8000:8000"
     env_file:

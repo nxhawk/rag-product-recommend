@@ -108,7 +108,7 @@ classDiagram
 
 ```yaml
 # ---- CrawlerConfig (toàn cục) ----
-user_agent: "Mozilla/5.0 (compatible; RagProductBot/0.1; +https://.../rag-product-recommend)"
+user_agent: "Mozilla/5.0 (compatible; RagProductBot/0.1; +https://.../techscout-rag-recommend)"
 timeout: 20.0             # timeout mỗi request (giây)
 max_retries: 3            # số lần retry khi có lỗi tạm thời
 retry_backoff: 1.5        # hệ số backoff lũy thừa giữa các lần retry

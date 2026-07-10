@@ -3,7 +3,7 @@
 ## Cây thư mục
 
 ```
-rag-product-recommend/
+techscout-rag-recommend/
 ├── pyproject.toml              # Dependencies & metadata dự án
 ├── uv.lock                     # Lockfile (tương tự package-lock.json)
 ├── .env                        # API keys (không commit)

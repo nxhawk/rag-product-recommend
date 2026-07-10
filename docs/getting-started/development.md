@@ -26,8 +26,8 @@ This guide walks you through setting up the project for local development, runni
 ## Clone & Install
 
 ```bash
-git clone https://github.com/nxhawk/rag-product-recommend.git
-cd rag-product-recommend
+git clone https://github.com/nxhawk/techscout-rag-recommend.git
+cd techscout-rag-recommend
 
 # Install all dependencies (including dev + docs groups)
 uv sync --group dev --group docs
@@ -218,7 +218,7 @@ See the [Docker deployment guide](../deployment/docker.md) for volumes, lifecycl
 ### Build Image Only
 
 ```bash
-docker build -f docker/Dockerfile -t rag-product-recommend .
+docker build -f docker/Dockerfile -t techscout-rag-recommend .
 ```
 
 ## Serving Docs Locally

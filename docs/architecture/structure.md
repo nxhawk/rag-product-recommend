@@ -3,7 +3,7 @@
 ## Directory Tree
 
 ```
-rag-product-recommend/
+techscout-rag-recommend/
 ├── pyproject.toml              # Dependencies & project metadata
 ├── uv.lock                     # Lockfile (like package-lock.json)
 ├── .env                        # API keys (not committed)

@@ -1,8 +1,8 @@
 site_name: RAG Product Recommendation
 site_description: Product recommendation & comparison system powered by RAG
-site_url: https://nxhawk.github.io/rag-product-recommend/
-repo_url: https://github.com/nxhawk/rag-product-recommend
-repo_name: rag-product-recommend
+site_url: https://nxhawk.github.io/techscout-rag-recommend/
+repo_url: https://github.com/nxhawk/techscout-rag-recommend
+repo_name: techscout-rag-recommend
 
 theme:
   name: material

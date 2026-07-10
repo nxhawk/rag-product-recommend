@@ -103,7 +103,7 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    stack: rag-product-recommend
+    stack: techscout-rag-recommend
 
 scrape_configs:
   - job_name: prometheus
@@ -120,7 +120,7 @@ scrape_configs:
 | ---- | ------- |
 | `global.scrape_interval` | Tần suất scrape mọi target (15s). Mỗi lần scrape lưu một sample cho mỗi series. |
 | `global.evaluation_interval` | Tần suất đánh giá rule alerting/recording (chưa định nghĩa rule nào, nhưng nhịp đã đặt sẵn). |
-| `global.external_labels` | Nhãn gắn vào **mọi** series rời khỏi Prometheus này (`stack="rag-product-recommend"`). Hữu ích khi federate hoặc so nhiều stack. |
+| `global.external_labels` | Nhãn gắn vào **mọi** series rời khỏi Prometheus này (`stack="techscout-rag-recommend"`). Hữu ích khi federate hoặc so nhiều stack. |
 | `scrape_configs[].job_name` | Tên logic cho một nhóm target; trở thành nhãn `job` trên mọi metric (`job="rag-api"`, …). |
 | `scrape_configs[].metrics_path` | Đường dẫn scrape. Mặc định `/metrics`; đặt rõ cho `rag-api` cho dễ đọc. |
 | `scrape_configs[].static_configs[].targets` | Danh sách `host:port`. Host là **tên service Compose** (`app`, `postgres-exporter`, …) phân giải trên mạng Docker. |

@@ -36,7 +36,7 @@ class CrawlerConfig:
     # HTTP client
     user_agent: str = (
         "Mozilla/5.0 (compatible; RagProductBot/0.1; "
-        "+https://github.com/nxhawk/rag-product-recommend)"
+        "+https://github.com/nxhawk/techscout-rag-recommend)"
     )
     timeout: float = 20.0
     max_retries: int = 3

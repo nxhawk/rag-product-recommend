@@ -81,10 +81,10 @@ scripts/ingest.py ─────────────┴──► product_ca
                           (product_chunks)                      (re-embed only on text change)
 ```
 
-See the [CDC Sync](https://nxhawk.github.io/rag-product-recommend/architecture/cdc/),
-[Write Path](https://nxhawk.github.io/rag-product-recommend/architecture/write-path/),
-[Data Flow](https://nxhawk.github.io/rag-product-recommend/architecture/data-flow/) and
-[C4 Model](https://nxhawk.github.io/rag-product-recommend/architecture/c4-model/) docs pages
+See the [CDC Sync](https://nxhawk.github.io/techscout-rag-recommend/architecture/cdc/),
+[Write Path](https://nxhawk.github.io/techscout-rag-recommend/architecture/write-path/),
+[Data Flow](https://nxhawk.github.io/techscout-rag-recommend/architecture/data-flow/) and
+[C4 Model](https://nxhawk.github.io/techscout-rag-recommend/architecture/c4-model/) docs pages
 for the full picture.
 
 ## Quick Start
@@ -101,7 +101,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 2. Clone and install dependencies
 git clone <repo-url>
-cd rag-product-recommend
+cd techscout-rag-recommend
 uv sync
 
 # 3. Configure API keys — create a .env at the project root.
@@ -124,7 +124,7 @@ docker compose -f docker/docker-compose.yml exec app uv run python scripts/inges
 
 Prefer running the API outside Docker? Start Postgres (and optionally
 Elasticsearch/Kafka) with Compose, then `uv run uvicorn api.app:app --reload`.
-See the [docs](https://nxhawk.github.io/rag-product-recommend/getting-started/quickstart/)
+See the [docs](https://nxhawk.github.io/techscout-rag-recommend/getting-started/quickstart/)
 for the minimal path.
 
 ## API Endpoints
@@ -154,7 +154,7 @@ curl -X POST http://localhost:8000/api/recommend \
 ## Project Structure
 
 ```
-rag-product-recommend/
+techscout-rag-recommend/
 ├── pyproject.toml       # Dependencies & project metadata
 ├── uv.lock              # Lockfile
 ├── CLAUDE.md            # AI coding rules + exhaustive per-file structure reference
@@ -223,14 +223,14 @@ docker compose up --build
 ## Documentation
 
 Full documentation (English + Vietnamese) is at the
-[project docs site](https://nxhawk.github.io/rag-product-recommend/) (deployed via
+[project docs site](https://nxhawk.github.io/techscout-rag-recommend/) (deployed via
 GitHub Pages, see `.github/workflows/docs.yml`). Highlights:
 
-- [CDC Sync](https://nxhawk.github.io/rag-product-recommend/architecture/cdc/) — how the indexes stay in sync
-- [Hybrid Retrieval](https://nxhawk.github.io/rag-product-recommend/architecture/hybrid-retrieval/) — semantic + BM25 + RRF
-- [Docker Deployment](https://nxhawk.github.io/rag-product-recommend/deployment/docker/) — the full Compose stack
-- [Monitoring](https://nxhawk.github.io/rag-product-recommend/deployment/monitoring/) — Prometheus + Grafana metrics & dashboards
-- [Viewing Data in Kibana](https://nxhawk.github.io/rag-product-recommend/deployment/kibana/) — inspect Elasticsearch
+- [CDC Sync](https://nxhawk.github.io/techscout-rag-recommend/architecture/cdc/) — how the indexes stay in sync
+- [Hybrid Retrieval](https://nxhawk.github.io/techscout-rag-recommend/architecture/hybrid-retrieval/) — semantic + BM25 + RRF
+- [Docker Deployment](https://nxhawk.github.io/techscout-rag-recommend/deployment/docker/) — the full Compose stack
+- [Monitoring](https://nxhawk.github.io/techscout-rag-recommend/deployment/monitoring/) — Prometheus + Grafana metrics & dashboards
+- [Viewing Data in Kibana](https://nxhawk.github.io/techscout-rag-recommend/deployment/kibana/) — inspect Elasticsearch
 
 To serve locally:
 

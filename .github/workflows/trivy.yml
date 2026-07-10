@@ -61,7 +61,7 @@ jobs:
           file: docker/Dockerfile
           push: false
           load: true
-          tags: rag-product-recommend:ci
+          tags: techscout-rag-recommend:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -69,7 +69,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
-          image-ref: rag-product-recommend:ci
+          image-ref: techscout-rag-recommend:ci
           format: sarif
           output: trivy-image.sarif
           severity: CRITICAL,HIGH

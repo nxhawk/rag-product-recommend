@@ -24,8 +24,8 @@
 ## Clone và cài đặt
 
 ```bash
-git clone https://github.com/nxhawk/rag-product-recommend.git
-cd rag-product-recommend
+git clone https://github.com/nxhawk/techscout-rag-recommend.git
+cd techscout-rag-recommend
 uv sync
 ```
 

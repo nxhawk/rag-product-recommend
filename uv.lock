@@ -1703,7 +1703,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rag-product-recommend"
+name = "techscout-rag-recommend"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
