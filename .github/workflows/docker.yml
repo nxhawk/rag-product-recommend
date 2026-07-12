@@ -76,13 +76,23 @@ jobs:
           cache-to: type=gha,mode=max
 
       # Notify the meta repo (techscout-platform) that a new image is available
-      # so it can (re)deploy the stack. Requires a PLATFORM_DISPATCH_TOKEN secret
-      # with `repo` scope on techscout-platform.
+      # so it can (re)deploy the stack. Requires secret PLATFORM_DISPATCH_TOKEN:
+      # a PAT (classic `repo` scope, or fine-grained with `contents: write`) on
+      # techscout-platform.
       - name: Trigger platform deploy
         if: github.event_name == 'push'
+        env:
+          TOKEN: ${{ secrets.PLATFORM_DISPATCH_TOKEN }}
         run: |
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.PLATFORM_DISPATCH_TOKEN }}" \
+          set -euo pipefail
+          if [ -z "$TOKEN" ]; then
+            echo "::error::PLATFORM_DISPATCH_TOKEN secret is not set on this repo -- techscout-platform will never be notified. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          curl -sS -f -X POST \
+            -H "Authorization: token $TOKEN" \
             -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${{ github.repository_owner }}/techscout-platform/dispatches \
-            -d '{"event_type":"service-updated","client_payload":{"service":"rag-recommend","sha":"${{ github.sha }}"}}'
+            -d "{\"event_type\":\"service-updated\",\"client_payload\":{\"service\":\"rag-recommend\",\"sha\":\"${{ github.sha }}\"}}"
+          echo "Dispatched service-updated to techscout-platform."
