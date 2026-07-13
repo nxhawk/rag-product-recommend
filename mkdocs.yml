@@ -98,6 +98,7 @@ plugins:
             Ingestion: Nạp dữ liệu
             Testing: Kiểm thử
             Scripts: Scripts
+            Proto Versioning: Chuyển version proto
 
 nav:
   - Home: index.md
@@ -138,3 +139,4 @@ nav:
       - Crawler: development/crawler.md
       - Ingestion: development/ingestion.md
       - Testing: development/testing.md
+      - Proto Versioning: development/proto-versioning.md
