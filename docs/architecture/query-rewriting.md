@@ -1,5 +1,9 @@
 # Query Rewriting
 
+## Overview
+
+Details the local `QueryRewriter` — its normalization, typo correction, synonym expansion, multi-query, and intent-aware rewriting techniques, and how they wire into retrieval.
+
 Before a query is embedded or matched against `FilterEngine`, it passes through
 `QueryRewriter` (`src/retrieval/query_rewriter.py`) - a small, extensible
 pipeline that improves recall on the messy, colloquial Vietnamese (and

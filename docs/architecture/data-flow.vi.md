@@ -1,5 +1,9 @@
 # Luồng dữ liệu
 
+## Tổng quan
+
+Theo dõi hệ thống từ góc nhìn dữ liệu — hình dạng, nơi lưu trữ và cách dữ liệu di chuyển qua các vòng đời nạp offline, CDC liên tục và truy vấn theo từng request.
+
 Trang này theo dõi hệ thống từ góc nhìn **dữ liệu** — dữ liệu có hình dạng gì ở mỗi giai đoạn, được lưu ở đâu, và di chuyển giữa các thành phần như thế nào. Về luồng điều khiển / các bước thuật toán, xem [Pipeline Flow](pipeline-flow.vi.md); về cấu trúc tĩnh của các đơn vị chạy được, xem [Mô hình C4](c4-model.vi.md).
 
 Có ba vòng đời dữ liệu: vòng đời **offline** dạng batch để bootstrap catalog và cả hai index tìm kiếm, vòng đời **liên tục** (CDC) lan truyền mọi lần ghi catalog sang các index, và vòng đời **online** theo từng request để trả lời câu hỏi người dùng.

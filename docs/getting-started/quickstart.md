@@ -1,5 +1,9 @@
 # Quick Start
 
+## Overview
+
+Shows the fastest ways to get the full stack running — via Docker or a manual setup — then ingest sample data and try the recommend, compare, search, and catalog endpoints.
+
 ## Recommended: Start the Full Stack with Docker
 
 The fastest way to get everything running is Docker Compose. From the `docker/` folder:

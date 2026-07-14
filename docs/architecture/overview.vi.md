@@ -1,5 +1,9 @@
 # Tổng quan kiến trúc
 
+## Tổng quan
+
+Giới thiệu tổng quát kiến trúc RAG — năm tầng cốt lõi cùng các luồng dữ liệu offline, CDC và online — kèm sơ đồ luồng và sơ đồ tuần tự end-to-end.
+
 Hệ thống tuân theo kiến trúc RAG tiêu chuẩn với năm tầng cốt lõi:
 
 ## Luồng End-to-End

@@ -1,5 +1,9 @@
 # seed.py — Execution Flow
 
+## Overview
+
+Documents the execution flow of `seed.py`, a placeholder script for seeding sample development data, and the pipeline-based alternative to use until it is implemented.
+
 Seeds sample product data for development. Currently a placeholder — the seeding
 logic is not implemented yet.
 

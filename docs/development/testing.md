@@ -1,5 +1,9 @@
 # Testing
 
+## Overview
+
+Covers how to run and write the test suite, the mirrored test layout, testing the CDC sync workers offline, and the manual RAG-quality evaluation scripts.
+
 ## Running Tests
 
 ```bash

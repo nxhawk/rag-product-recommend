@@ -1,5 +1,9 @@
 # Monitoring with Prometheus & Grafana
 
+## Overview
+
+Explains the observability layer — how Prometheus scrapes metrics from the API and every datastore and Grafana turns them into dashboards — with a metric reference, the provisioned dashboard, and example PromQL queries.
+
 This stack ships a full **observability** layer: **Prometheus** collects metrics
 from the API and every datastore, and **Grafana** turns them into dashboards.
 Together they answer the operational questions the logs can't: *how fast is the

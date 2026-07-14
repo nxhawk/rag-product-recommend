@@ -1,5 +1,9 @@
 # Project Structure
 
+## Overview
+
+Maps the repository's directory structure — what each folder and key file under `src/`, `api/`, `tests/`, and the rest is for, and when to add or change one.
+
 ## Directory Tree
 
 ```

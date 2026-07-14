@@ -1,5 +1,9 @@
 # Migrating the gRPC server to a new proto version
 
+## Overview
+
+A step-by-step guide to standing up a new (`v2`) version of the `RecommendService` gRPC contract alongside the existing `v1` without breaking current clients.
+
 rag-recommend **implements** (serves) `RecommendService` from
 `proto/techscout/recommend/v1/recommend.proto` in the `techscout-protos`
 submodule (see

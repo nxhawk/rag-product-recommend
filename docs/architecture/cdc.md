@@ -1,5 +1,9 @@
 # CDC Sync (Change Data Capture)
 
+## Overview
+
+Deep-dive into the CDC subsystem — how Debezium, Kafka, and the two sync workers keep the Elasticsearch and pgvector search indexes in sync with the `product_catalog` source of truth.
+
 This page is the implementation deep-dive for the **CDC** subsystem — the part
 that keeps the two derived search indexes (Elasticsearch keyword + pgvector
 semantic) in sync with the `product_catalog` source of truth. For the data

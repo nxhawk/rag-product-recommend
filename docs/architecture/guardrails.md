@@ -1,5 +1,9 @@
 # Guardrails
 
+## Overview
+
+Explains the three non-LLM guardrail stages — input, context, and output — that validate the user query, the retrieved product text, and the LLM's JSON response across both pipelines.
+
 Non-LLM guardrails protect both API endpoints (`/api/recommend`, `/api/compare`) at three points in the request lifecycle: the raw user **query** (input), the retrieved **product data** injected into the prompt (context), and the **LLM's JSON response** (output). None of these checks call an LLM — they are pure rule/heuristic/schema code, so they're fast, free, and deterministic.
 
 This complements the schema-level validation in [Request & Response Schemas](../api/schemas.md) (Pydantic `Field` constraints on the API models) — schema checks reject malformed *requests*; the guardrails described here additionally catch things schema types can't express (prompt injection phrasing, hallucinated products, malformed LLM JSON).

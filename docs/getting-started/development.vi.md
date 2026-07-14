@@ -1,5 +1,9 @@
 # Hướng dẫn phát triển
 
+## Tổng quan
+
+Hướng dẫn thiết lập dự án cục bộ — cài đặt dependency, cấu hình môi trường và settings, nạp dữ liệu, và chạy server, test cùng stack Docker.
+
 Hướng dẫn này giúp bạn thiết lập dự án để phát triển cục bộ, chạy server, thực thi test, và làm việc với Docker.
 
 ## Yêu cầu

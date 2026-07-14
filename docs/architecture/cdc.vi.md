@@ -1,5 +1,9 @@
 # Đồng bộ CDC (Change Data Capture)
 
+## Tổng quan
+
+Đi sâu vào hệ thống con CDC — cách Debezium, Kafka và hai sync worker giữ các index tìm kiếm Elasticsearch và pgvector đồng bộ với source of truth `product_catalog`.
+
 Trang này đi sâu vào phần hiện thực của hệ thống con **CDC** — phần giữ hai index
 tìm kiếm dẫn xuất (Elasticsearch keyword + pgvector semantic) đồng bộ với source
 of truth `product_catalog`. Về dạng dữ liệu xem [Luồng dữ liệu](data-flow.vi.md);

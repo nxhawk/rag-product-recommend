@@ -1,5 +1,9 @@
 # Tổng quan Scripts
 
+## Tổng quan
+
+Giới thiệu các CLI entry point trong `scripts/` — crawl, ingest, sync_worker và seed — dùng để vận hành hệ thống bên ngoài API, và cho thấy chúng khớp với nhau end-to-end như thế nào.
+
 Thư mục `scripts/` chứa các CLI entry point để vận hành hệ thống bên ngoài API:
 
 | Script | Mục đích | Lệnh thường dùng |

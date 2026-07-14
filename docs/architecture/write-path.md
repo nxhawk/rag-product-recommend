@@ -1,5 +1,9 @@
 # Product Write Path (CRUD API, Ingest & DB Sync)
 
+## Overview
+
+Explains the product write path — how the CRUD API and `scripts/ingest.py` both write only to the `product_catalog` source of truth, and how CDC then propagates each change to the two search indexes.
+
 This page answers two related questions: **what happens when you call the product CRUD API**, **what happens when you run `scripts/ingest.py`**, and — for both — **how the databases are updated afterwards**.
 
 For the broader system overview see [Data Flow](data-flow.md); for the ingest script reference see [ingest.py](../scripts/ingest.md); for the sync worker see [sync_worker.py](../scripts/sync-worker.md); for endpoint payloads see [API Endpoints](../api/endpoints.md).

@@ -1,5 +1,9 @@
 # RAG Product Recommendation
 
+## Tổng quan
+
+Trang chủ của dịch vụ gợi ý và so sánh sản phẩm RAG, tóm tắt các tính năng chính và liên kết tới tài liệu cài đặt, kiến trúc và API.
+
 Hệ thống gợi ý và so sánh sản phẩm được xây dựng trên nền tảng **Retrieval-Augmented Generation (RAG)**.
 
 Người dùng đặt câu hỏi bằng ngôn ngữ tự nhiên, hệ thống truy xuất dữ liệu sản phẩm liên quan từ vector database, sau đó LLM tạo ra câu trả lời có ngữ cảnh và lập luận rõ ràng.

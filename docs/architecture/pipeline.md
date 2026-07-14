@@ -1,5 +1,9 @@
 # Pipeline Details
 
+## Overview
+
+Summarizes the RAG pipelines — router classification, the recommend and compare flows with their scoring weights, hybrid search, CDC sync, and the central configuration.
+
 ## RAG Router
 
 The `RAGRouter` classifies user queries into four types using regex pattern matching on Vietnamese keywords:

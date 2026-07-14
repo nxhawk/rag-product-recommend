@@ -1,5 +1,9 @@
 # Xem dữ liệu trong Kibana
 
+## Tổng quan
+
+Hướng dẫn thực hành để duyệt và truy vấn index keyword Elasticsearch (`product_chunks`) trong Kibana — dùng Dev Tools, Discover và bộ lọc KQL để đọc dữ liệu đã index.
+
 Kibana là web UI để duyệt và query index keyword Elasticsearch
 (`product_chunks`) — có thể xem như "DBeaver cho Elasticsearch" trong stack này.
 Trang này là hướng dẫn thực hành để xem dữ liệu trong index.

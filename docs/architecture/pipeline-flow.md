@@ -1,5 +1,9 @@
 # Pipeline Flow
 
+## Overview
+
+How a user query flows through the RAG system end-to-end — classified by the RAG Router into the recommend, compare, info, or hybrid pipeline, down to the final response.
+
 This page describes the detailed data flow through the RAG system, from user query to final response.
 
 ## High-Level Overview

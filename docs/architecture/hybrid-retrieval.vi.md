@@ -1,5 +1,9 @@
 # Truy xuất lai & Reranking
 
+## Tổng quan
+
+Giải thích cơ chế truy xuất lai của luồng recommend — semantic search pgvector hợp nhất với keyword search BM25 qua Reciprocal Rank Fusion, rerank bằng cross-encoder tùy chọn, và cách CDC giữ cả hai index luôn fresh.
+
 Luồng recommend (`POST /api/recommend`) truy xuất ứng viên bằng **chiến lược
 lai**: semantic search dày đặc (pgvector) hợp nhất với keyword search thưa
 (BM25) qua Reciprocal Rank Fusion, sau đó tùy chọn **rerank bằng

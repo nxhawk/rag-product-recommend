@@ -1,5 +1,9 @@
 # Crawler
 
+## Tổng quan
+
+Giải thích module crawler (`src/crawler/`) thu thập dữ liệu sản phẩm thô từ các trang thương mại điện tử — cấu hình, luồng thực thi, trích xuất thông số và đánh giá, định dạng output và cách thêm nguồn mới.
+
 Module crawler (`src/crawler/`) thu thập dữ liệu sản phẩm thô từ các trang
 thương mại điện tử và ghi vào `data/raw/crawled/`. Output của nó khớp với
 schema sản phẩm thô mà pipeline ingestion tiêu thụ, nên dữ liệu crawl được có

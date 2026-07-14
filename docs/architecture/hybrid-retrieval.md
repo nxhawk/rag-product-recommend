@@ -1,5 +1,9 @@
 # Hybrid Retrieval & Reranking
 
+## Overview
+
+Explains the recommend flow's hybrid retrieval — dense pgvector search fused with BM25 keyword search via Reciprocal Rank Fusion, optional cross-encoder reranking, and how CDC keeps both indexes fresh.
+
 The recommend flow (`POST /api/recommend`) retrieves candidates with a **hybrid
 strategy**: dense semantic search (pgvector) fused with sparse keyword search
 (BM25) via Reciprocal Rank Fusion, optionally followed by **cross-encoder

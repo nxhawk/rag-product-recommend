@@ -1,5 +1,9 @@
 # Docker Deployment
 
+## Overview
+
+Documents how to run the full Docker Compose stack — the API, datastores, Kafka/Debezium CDC pipeline, sync workers, and monitoring — locally with one command, plus a minimal pre-built GHCR image option.
+
 !!! info "Orchestration lives in the platform repo"
     This page documents the full Docker / Compose stack, which now lives in the
     **techscout-platform** meta-repo under `docker/` — not in this service repo.

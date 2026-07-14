@@ -1,5 +1,9 @@
 # Development Guide
 
+## Overview
+
+A guide to setting up the project locally — installing dependencies, configuring environment and settings, ingesting data, and running the server, tests, and Docker stack.
+
 This guide walks you through setting up the project for local development, running the server, executing tests, and working with Docker.
 
 ## Prerequisites

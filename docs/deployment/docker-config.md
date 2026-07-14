@@ -1,5 +1,9 @@
 # Config Files Reference (`docker/`)
 
+## Overview
+
+Explains, field by field, the config files in `docker/` that are mounted into the infrastructure containers — the Debezium connector, the Prometheus scrape config, and Grafana's provisioning and dashboards.
+
 Besides `docker-compose.yml`, the `docker/` folder holds the config files that
 are **mounted into** the infrastructure containers. Compose only wires services
 together; the behaviour of Debezium, Prometheus and Grafana is defined by these

@@ -1,8 +1,12 @@
 # Luồng xử lý (Pipeline Flow)
 
+## Tổng quan
+
+Cách một truy vấn đi xuyên hệ thống RAG từ đầu đến cuối — được RAG Router phân loại theo loại truy vấn vào pipeline recommend, compare, info hoặc hybrid, cho tới phản hồi cuối cùng.
+
 Trang này mô tả chi tiết luồng dữ liệu qua hệ thống RAG, từ truy vấn người dùng đến phản hồi cuối cùng.
 
-## Tổng quan
+## Tổng quan mức cao
 
 Mọi truy vấn của người dùng đều đi qua **RAG Router** trước tiên, router này phân loại truy vấn thành một trong bốn loại và điều hướng tới pipeline phù hợp.
 

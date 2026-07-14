@@ -1,5 +1,9 @@
 # C4 Model
 
+## Overview
+
+Presents the system architecture as C4 diagrams at three zoom levels — System Context, Container, and Component — showing the actors, deployable units, and request-handling components.
+
 The [C4 model](https://c4model.com/) (Context, Container, Component, Code) describes a software system at four zoom levels. This page covers the first three — Context, Container, Component — which are the levels useful for understanding this system's architecture. The Code level is skipped in favor of the per-module tables in [Project Structure](structure.md).
 
 ## Level 1: System Context

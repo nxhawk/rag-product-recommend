@@ -1,5 +1,9 @@
 # Chi tiết Pipeline
 
+## Tổng quan
+
+Tóm tắt các pipeline RAG — phân loại của router, luồng recommend và compare cùng trọng số chấm điểm, hybrid search, đồng bộ CDC và cấu hình trung tâm.
+
 ## RAG Router
 
 `RAGRouter` phân loại truy vấn người dùng thành bốn loại bằng cách so khớp regex trên các từ khóa tiếng Việt:

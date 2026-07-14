@@ -1,5 +1,9 @@
 # crawl.py — Luồng chạy
 
+## Tổng quan
+
+Mô tả luồng chạy của `crawl.py`, script crawl dữ liệu sản phẩm từ các nguồn đã cấu hình (thegioididong, cellphones) vào `data/raw/crawled/`.
+
 Crawl dữ liệu sản phẩm từ các nguồn đã cấu hình (thegioididong, cellphones) vào
 `data/raw/crawled/`.
 

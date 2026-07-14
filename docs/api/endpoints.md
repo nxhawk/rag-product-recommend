@@ -1,5 +1,9 @@
 # API Endpoints
 
+## Overview
+
+Reference for the service's gRPC and REST API endpoints — recommend, compare, search, health, and product catalog CRUD — with their request/response formats and error codes.
+
 ## gRPC — `RecommendService` (`:50052`)
 
 How the **gateway** calls this service. Contract: `proto/recommend.proto`,

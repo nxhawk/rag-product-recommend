@@ -1,5 +1,9 @@
 # Testing
 
+## Tổng quan
+
+Mô tả cách chạy và viết bộ test, cấu trúc test phản chiếu, test các CDC sync worker ngoại tuyến, và các script đánh giá chất lượng RAG chạy thủ công.
+
 ## Chạy Test
 
 ```bash

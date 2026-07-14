@@ -1,5 +1,9 @@
 # sync_worker.py — Luồng thực thi
 
+## Tổng quan
+
+Mô tả luồng chạy của `sync_worker.py`, CDC sync worker consume luồng thay đổi Debezium và giữ cho một chỉ mục dẫn xuất — Elasticsearch (`indexer`) hoặc pgvector (`embedder`) — đồng bộ với catalog.
+
 Chạy một **CDC sync worker**: một Kafka consumer đọc luồng thay đổi Debezium của
 bảng `product_catalog` và giữ cho **một** chỉ mục dẫn xuất luôn mới. Có hai vai
 trò, mỗi vai trò cho một chỉ mục:

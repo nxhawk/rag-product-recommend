@@ -1,5 +1,9 @@
 # Giám sát với Prometheus & Grafana
 
+## Tổng quan
+
+Giải thích lớp observability — cách Prometheus scrape metric từ API và mọi datastore rồi Grafana biến chúng thành dashboard — kèm danh sách metric, dashboard provision sẵn, và các truy vấn PromQL ví dụ.
+
 Stack này đi kèm một lớp **observability** (khả năng quan sát) đầy đủ:
 **Prometheus** thu thập metric từ API và mọi datastore, còn **Grafana** biến chúng
 thành dashboard. Cùng nhau, chúng trả lời những câu hỏi vận hành mà log không trả

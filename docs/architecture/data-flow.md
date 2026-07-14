@@ -1,5 +1,9 @@
 # Data Flow
 
+## Overview
+
+Traces the system from a data perspective — the shape, storage, and movement of data across the offline ingestion, continuous CDC, and per-request query lifecycles.
+
 This page tracks the system from a **data** perspective — what shape the data takes at each stage, where it's stored, and how it moves between components. For the control flow / algorithm steps, see [Pipeline Flow](pipeline-flow.md); for the static structure of runnable units, see [C4 Model](c4-model.md).
 
 There are three data lifecycles: an **offline** batch lifecycle that bootstraps the catalog and both search indexes, a **continuous** CDC lifecycle that propagates every catalog write to the indexes, and an **online** per-request lifecycle that answers a user query.

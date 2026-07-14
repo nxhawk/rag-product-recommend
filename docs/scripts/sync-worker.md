@@ -1,5 +1,9 @@
 # sync_worker.py — Execution Flow
 
+## Overview
+
+Documents the execution flow of `sync_worker.py`, the CDC sync worker that consumes the Debezium change stream and keeps one derived index — Elasticsearch (`indexer`) or pgvector (`embedder`) — in sync with the catalog.
+
 Runs a **CDC sync worker**: a Kafka consumer that reads the Debezium change
 stream for `product_catalog` and keeps **one** derived index fresh. There are
 two roles, one per index:

@@ -1,5 +1,9 @@
 # Crawler
 
+## Overview
+
+Explains the crawler module (`src/crawler/`) that scrapes raw product data from e-commerce sites — its configuration, execution flow, spec and review extraction, output format, and how to add a new source.
+
 The crawler module (`src/crawler/`) collects raw product data from e-commerce
 websites and writes it to `data/raw/crawled/`. Its output matches the raw product
 schema consumed by the ingestion pipeline, so crawled data flows straight into

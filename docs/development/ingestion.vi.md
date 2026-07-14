@@ -1,5 +1,9 @@
 # Nạp dữ liệu (Ingestion)
 
+## Tổng quan
+
+Giải thích script nạp dữ liệu bootstrap (`scripts/ingest.py`) đọc sản phẩm thô rồi ghi vào catalog, pgvector và Elasticsearch — đi qua từng bước từ làm sạch, chia chunk, embedding đến lưu trữ.
+
 Script nạp dữ liệu (`scripts/ingest.py`) là đường **bootstrap** cho một hệ thống
 mới tinh. Nó đọc sản phẩm thô từ đĩa, chuẩn hóa, rồi ghi vào **ba đích** để hệ
 thống dùng được ngay:

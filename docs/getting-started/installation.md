@@ -1,5 +1,9 @@
 # Installation
 
+## Overview
+
+Lists the prerequisites and steps to install the project, set up environment variables, and pull in the runtime, dev, and docs dependencies.
+
 ## Prerequisites
 
 - Python 3.11+

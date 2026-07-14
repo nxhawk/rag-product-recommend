@@ -1,5 +1,9 @@
 # Contributing
 
+## Overview
+
+Conventions for contributing to the project — development setup, code style, adding modules, commit message format, and running the docs locally.
+
 ## Development Setup
 
 ```bash

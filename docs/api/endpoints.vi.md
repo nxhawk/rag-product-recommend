@@ -1,5 +1,9 @@
 # API Endpoints
 
+## Tổng quan
+
+Tài liệu tham khảo các endpoint gRPC và REST của service — gợi ý, so sánh, tìm kiếm, health và CRUD catalog sản phẩm — kèm định dạng request/response và mã lỗi.
+
 ## gRPC — `RecommendService` (`:50052`)
 
 Cách **gateway** gọi service này. Hợp đồng: `proto/recommend.proto`, stub sinh

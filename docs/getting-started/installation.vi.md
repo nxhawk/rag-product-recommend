@@ -1,5 +1,9 @@
 # Cài đặt
 
+## Tổng quan
+
+Liệt kê các yêu cầu và các bước cài đặt dự án, thiết lập biến môi trường, và cài các dependency runtime, dev và docs.
+
 ## Yêu cầu
 
 - Python 3.11+

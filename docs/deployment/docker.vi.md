@@ -1,5 +1,9 @@
 # Triển khai với Docker
 
+## Tổng quan
+
+Hướng dẫn chạy toàn bộ stack Docker Compose — API, các datastore, pipeline CDC Kafka/Debezium, sync worker và giám sát — trên máy local chỉ với một lệnh, kèm lựa chọn image dựng sẵn tối giản trên GHCR.
+
 !!! info "Orchestration nằm ở repo platform"
     Trang này mô tả toàn bộ stack Docker / Compose — hiện đã chuyển sang meta-repo
     **techscout-platform** trong thư mục `docker/`, không còn ở repo service này.

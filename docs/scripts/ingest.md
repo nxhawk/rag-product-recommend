@@ -1,5 +1,9 @@
 # ingest.py — Execution Flow
 
+## Overview
+
+Documents the execution flow of `ingest.py`, the one-time bootstrap script that loads raw products and writes all three targets — the source-of-truth catalog, pgvector, and the Elasticsearch keyword index.
+
 Bootstrap script: loads raw product data, cleans it, and writes **three
 targets** so a fresh system is immediately usable:
 

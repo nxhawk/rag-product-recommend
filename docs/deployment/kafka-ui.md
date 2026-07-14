@@ -1,5 +1,9 @@
 # Viewing Kafka in Kafka UI
 
+## Overview
+
+A hands-on guide to inspecting the CDC pipeline through the Kafka UI web dashboard — browsing topics and messages, watching consumer-group lag, and checking the Debezium connector.
+
 Kafka UI ([kafbat/kafka-ui](https://ui.docs.kafbat.io/)) is the web dashboard for
 browsing the Kafka broker in this stack — think of it as the "Kibana for Kafka".
 It shows topics and their live messages, consumer-group lag, and the state of the

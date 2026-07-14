@@ -1,5 +1,9 @@
 # Bắt đầu nhanh
 
+## Tổng quan
+
+Chỉ ra các cách nhanh nhất để chạy toàn bộ stack — qua Docker hoặc thiết lập thủ công — rồi nạp dữ liệu mẫu và thử các endpoint gợi ý, so sánh, tìm kiếm và catalog.
+
 ## Khuyến nghị: Khởi động toàn bộ stack với Docker
 
 Cách nhanh nhất để chạy mọi thứ là Docker Compose. Từ thư mục `docker/`:

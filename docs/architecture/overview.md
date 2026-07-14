@@ -1,5 +1,9 @@
 # Architecture Overview
 
+## Overview
+
+High-level tour of the RAG architecture — its five core layers and the offline, CDC, and online data paths — with end-to-end flow and sequence diagrams.
+
 The system follows a standard RAG architecture with five core layers:
 
 ## End-to-End Flow

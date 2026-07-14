@@ -1,5 +1,9 @@
 # Luồng ghi dữ liệu sản phẩm (API CRUD, Ingest & Đồng bộ DB)
 
+## Tổng quan
+
+Giải thích luồng ghi dữ liệu sản phẩm — cách API CRUD và `scripts/ingest.py` đều chỉ ghi vào source of truth `product_catalog`, và cách CDC sau đó lan truyền mỗi thay đổi tới hai index tìm kiếm.
+
 Trang này trả lời các câu hỏi liên quan: **điều gì xảy ra khi bạn gọi API CRUD sản phẩm**, **điều gì xảy ra khi bạn chạy `scripts/ingest.py`**, và — cho cả hai — **các database được cập nhật ra sao sau đó**.
 
 Xem tổng quan toàn hệ thống ở [Luồng dữ liệu](data-flow.md); tài liệu script ingest ở [ingest.py](../scripts/ingest.md); sync worker ở [sync_worker.py](../scripts/sync-worker.md); payload các endpoint ở [API Endpoints](../api/endpoints.md).

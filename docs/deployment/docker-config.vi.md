@@ -1,5 +1,9 @@
 # Tham chiếu tệp cấu hình (`docker/`)
 
+## Tổng quan
+
+Giải thích chi tiết từng trường các tệp cấu hình trong `docker/` được mount vào các container hạ tầng — Debezium connector, cấu hình scrape của Prometheus, và provisioning cùng dashboard của Grafana.
+
 Ngoài `docker-compose.yml`, thư mục `docker/` còn chứa các tệp cấu hình được
 **mount vào** các container hạ tầng. Compose chỉ nối các service với nhau; còn
 hành vi của Debezium, Prometheus và Grafana do các tệp này quy định. Trang này

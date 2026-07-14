@@ -1,5 +1,9 @@
 # Mô hình C4
 
+## Tổng quan
+
+Trình bày kiến trúc hệ thống dưới dạng sơ đồ C4 ở ba mức — System Context, Container và Component — thể hiện các tác nhân, đơn vị triển khai và các thành phần xử lý request.
+
 [Mô hình C4](https://c4model.com/) (Context, Container, Component, Code) mô tả một hệ thống phần mềm ở bốn mức độ phóng to dần. Trang này trình bày ba mức đầu — Context (Bối cảnh), Container (Khối triển khai), Component (Thành phần) — vì đây là các mức hữu ích để hiểu kiến trúc hệ thống này. Mức Code được bỏ qua, thay vào đó xem bảng chi tiết theo từng module tại [Cấu trúc dự án](structure.vi.md).
 
 ## Mức 1: System Context (Bối cảnh hệ thống)

@@ -1,5 +1,9 @@
 # Schema Request & Response
 
+## Tổng quan
+
+Mô tả các Pydantic model request và response, cùng các ràng buộc kiểm tra ở tầng field, được các endpoint API sử dụng.
+
 Tất cả schema được định nghĩa dưới dạng Pydantic model trong `api/schemas.py`.
 Các ràng buộc ở tầng field tại đây là lớp [guardrail](../architecture/guardrails.vi.md)
 đầu tiên trong số nhiều lớp — chúng từ chối request sai định dạng bằng một

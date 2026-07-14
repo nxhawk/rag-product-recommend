@@ -1,5 +1,9 @@
 # Ingestion
 
+## Overview
+
+Explains the bootstrap ingestion script (`scripts/ingest.py`) that loads raw products and writes the catalog, pgvector, and Elasticsearch targets — walking through each stage from cleaning through chunking, embedding, and storage.
+
 The ingestion script (`scripts/ingest.py`) is the **bootstrap** path for a fresh
 system. It loads raw products from disk, normalizes them, and writes **three
 targets** so the stack is immediately usable:

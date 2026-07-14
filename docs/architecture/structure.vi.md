@@ -1,5 +1,9 @@
 # Cấu trúc dự án
 
+## Tổng quan
+
+Bản đồ cấu trúc thư mục của repo — mục đích của từng thư mục và file quan trọng trong `src/`, `api/`, `tests/` và phần còn lại, cùng thời điểm nên thêm hoặc thay đổi.
+
 ## Cây thư mục
 
 ```

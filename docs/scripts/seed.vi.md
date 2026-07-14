@@ -1,5 +1,9 @@
 # seed.py — Luồng chạy
 
+## Tổng quan
+
+Mô tả luồng chạy của `seed.py`, script placeholder để seed dữ liệu development mẫu, cùng cách thay thế bằng pipeline thật cho tới khi nó được cài đặt.
+
 Seed dữ liệu sản phẩm mẫu cho development. Hiện tại là placeholder — logic
 seeding chưa được cài đặt.
 

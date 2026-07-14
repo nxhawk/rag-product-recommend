@@ -1,5 +1,9 @@
 # crawl.py — Execution Flow
 
+## Overview
+
+Documents the execution flow of `crawl.py`, which crawls product data from the configured sources (thegioididong, cellphones) into `data/raw/crawled/`.
+
 Crawls product data from configured sources (thegioididong, cellphones) into
 `data/raw/crawled/`.
 

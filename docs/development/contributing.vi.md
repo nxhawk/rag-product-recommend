@@ -1,5 +1,9 @@
 # Đóng góp
 
+## Tổng quan
+
+Các quy ước khi đóng góp cho dự án — thiết lập môi trường phát triển, code style, thêm module, định dạng commit message, và chạy docs cục bộ.
+
 ## Thiết lập môi trường phát triển
 
 ```bash

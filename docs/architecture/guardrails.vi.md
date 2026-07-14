@@ -1,5 +1,9 @@
 # Guardrail
 
+## Tổng quan
+
+Giải thích ba tầng guardrail không dùng LLM — đầu vào, ngữ cảnh và đầu ra — kiểm tra truy vấn người dùng, văn bản sản phẩm đã truy xuất và response JSON của LLM trong cả hai pipeline.
+
 Các guardrail không dùng LLM bảo vệ cả hai API endpoint (`/api/recommend`, `/api/compare`) tại ba điểm trong vòng đời request: **truy vấn** thô của người dùng (đầu vào), **dữ liệu sản phẩm** đã truy xuất được đưa vào prompt (ngữ cảnh), và **response JSON của LLM** (đầu ra). Không guardrail nào trong số này gọi LLM — tất cả đều là code rule/heuristic/schema thuần túy, nên nhanh, miễn phí và tất định (deterministic).
 
 Cơ chế này bổ sung cho việc validate ở tầng schema trong [Schema Request & Response](../api/schemas.vi.md) (ràng buộc `Field` của Pydantic trên các model API) — kiểm tra schema từ chối các *request* sai định dạng; các guardrail được mô tả ở đây bắt thêm những thứ mà kiểu dữ liệu schema không thể diễn đạt được (câu chữ prompt injection, sản phẩm bị "bịa", JSON LLM sai định dạng).

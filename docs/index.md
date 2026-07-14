@@ -1,5 +1,9 @@
 # RAG Product Recommendation
 
+## Overview
+
+The landing page for the RAG product recommendation and comparison service, summarizing its key features and linking to the setup, architecture, and API docs.
+
 A product recommendation and comparison system powered by **Retrieval-Augmented Generation (RAG)**.
 
 Users ask natural language queries, the system retrieves relevant product data from a vector database, then an LLM generates contextual, well-reasoned answers

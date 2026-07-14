@@ -1,5 +1,9 @@
 # ingest.py — Luồng chạy
 
+## Tổng quan
+
+Mô tả luồng chạy của `ingest.py`, script bootstrap một lần load sản phẩm thô và ghi cả ba đích — catalog source of truth, pgvector, và index keyword Elasticsearch.
+
 Script bootstrap: load dữ liệu sản phẩm thô, làm sạch, rồi ghi **ba đích** để
 một hệ thống mới có thể dùng được ngay:
 

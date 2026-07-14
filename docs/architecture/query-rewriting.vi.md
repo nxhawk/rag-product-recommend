@@ -1,5 +1,9 @@
 # Viết lại truy vấn (Query Rewriting)
 
+## Tổng quan
+
+Trình bày chi tiết `QueryRewriter` chạy local — các kỹ thuật chuẩn hóa, sửa lỗi chính tả, mở rộng từ đồng nghĩa, multi-query và viết lại theo intent, cùng cách tích hợp vào retrieval.
+
 Trước khi một câu query được embed hoặc so khớp với `FilterEngine`, nó đi qua
 `QueryRewriter` (`src/retrieval/query_rewriter.py`) - một pipeline nhỏ, dễ mở
 rộng giúp tăng recall trên những câu hỏi tiếng Việt (và tiếng Anh) khẩu ngữ,

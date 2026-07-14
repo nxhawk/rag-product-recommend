@@ -1,5 +1,9 @@
 # Request & Response Schemas
 
+## Overview
+
+Documents the Pydantic request and response models, and their field-level validation constraints, used by the API endpoints.
+
 All schemas are defined as Pydantic models in `api/schemas.py`. Field-level
 constraints here are the first of several [guardrail](../architecture/guardrails.md)
 layers — they reject malformed requests as a plain `422` before any pipeline

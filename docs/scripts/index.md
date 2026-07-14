@@ -1,5 +1,9 @@
 # Scripts Overview
 
+## Overview
+
+Introduces the `scripts/` CLI entry points — crawl, ingest, sync_worker, and seed — used to operate the system outside the API, and shows how they fit together end to end.
+
 The `scripts/` folder contains CLI entry points for operating the system outside the API:
 
 | Script | Purpose | Typical command |
