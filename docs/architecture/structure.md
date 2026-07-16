@@ -47,9 +47,24 @@ techscout-rag-recommend/
 └── data/                       # Data directory (partially gitignored)
 ```
 
+```mermaid
+flowchart LR
+    CRAWL["🕷️ crawler/"] --> CATALOG["🗄️ catalog/"]
+    CATALOG --> INGEST["📥 ingestion/"]
+    INGEST --> EMBED["🧬 embedding/"]
+    EMBED --> RETRIEVE["🔍 retrieval/"]
+    CATALOG -. CDC/Debezium .-> SYNC["🔄 sync/"]
+    SYNC --> EMBED
+    RETRIEVE --> PIPE["🧵 pipeline/"]
+    PIPE --> GUARD["🛡️ guardrails/"]
+    GUARD --> GEN["✨ generation/"]
+    GEN --> API["🌐 api/"]
+    API --> PIPE
+```
+
 ---
 
-## Root Files
+## 📄 Root Files
 
 | File | Purpose | When to update |
 | ---- | ------- | -------------- |
@@ -63,11 +78,11 @@ techscout-rag-recommend/
 
 ---
 
-## `src/` — Core Business Logic
+## 📁 `src/` — Core Business Logic
 
 All domain logic lives here. This is a pure Python package with no web framework dependency — it can be used independently of FastAPI.
 
-### `src/crawler/` — Web Crawling
+### 🕷️ `src/crawler/` — Web Crawling
 
 **Purpose:** Collect raw product data (specs + buyer reviews) from e-commerce sites into `data/raw/crawled/`. Lightweight stack: `httpx` + `BeautifulSoup`. See the [Crawler guide](../development/crawler.md) for the full flow.
 
@@ -92,7 +107,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 **When to add a new file:** When crawling a new source — add `<name>_spider.py` and a `SourceConfig` block in `configs/crawler.yaml`.
 
-### `src/catalog/` — Source of Truth (Product Catalog)
+### 🗄️ `src/catalog/` — Source of Truth (Product Catalog)
 
 **Purpose:** CRUD access to the `product_catalog` table — the single source of truth that CDC captures. Search indexes are derived from it and must never be written by API handlers.
 
@@ -100,7 +115,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 | ---- | ------- | ------------------- |
 | `product_repository.py` | `ProductRepository` — create/upsert/update/delete/get/list on `product_catalog` (parameterized SQL, `REPLICA IDENTITY FULL` for Debezium before-images) | When adding a product field (also update `api/schemas.py` and the chunker) |
 
-### `src/ingestion/` — Data Loading & Normalization
+### 📥 `src/ingestion/` — Data Loading & Normalization
 
 **Purpose:** Load raw product data from various sources, clean it, parse specifications, and chunk it into units suitable for embedding.
 
@@ -115,7 +130,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 **When to add a new file:** When you need a new data source type (e.g., `api_loader.py` for a REST API) or a new preprocessing step (e.g., `deduplicator.py`).
 
-### `src/embedding/` — Embedding & Vector DB
+### 🧬 `src/embedding/` — Embedding & Vector DB
 
 **Purpose:** Convert text into vectors and manage the vector database (Postgres + pgvector).
 
@@ -127,7 +142,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 **When to add a new file:** When adding a new embedding strategy (e.g., `sparse_embedder.py` for BM25 vectors) or a new vector DB backend.
 
-### `src/retrieval/` — Product Retrieval & Search
+### 🔍 `src/retrieval/` — Product Retrieval & Search
 
 **Purpose:** Given a user query, retrieve the most relevant products from the vector store using a combination of semantic search, keyword matching, and metadata filtering.
 
@@ -144,7 +159,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 **When to add a new file:** When adding a new search strategy (e.g., `bm25_search.py`), a new filter type that's complex enough to warrant its own module, or a new scoring algorithm.
 
-### `src/sync/` — CDC Sync Workers
+### 🔄 `src/sync/` — CDC Sync Workers
 
 **Purpose:** Consume the Debezium change stream (Kafka) and keep the derived search indexes in sync with the catalog. See [Hybrid Retrieval](hybrid-retrieval.md#cdc-architecture-how-the-indexes-stay-fresh).
 
@@ -156,7 +171,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 | `embedding_worker.py` | `EmbeddingSyncer` — re-embed on text change, metadata-only update for price/rating, delete on `d` | When changing the re-embed decision or vector upsert flow |
 | `runner.py` | Kafka consumer loop — at-least-once, commit after apply | When changing delivery semantics or error handling |
 
-### `src/generation/` — LLM Generation
+### ✨ `src/generation/` — LLM Generation
 
 **Purpose:** Call LLM providers, manage prompt templates, parse responses, and validate input/output.
 
@@ -176,7 +191,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 **When to add a new file:** When creating a new pipeline type (e.g., `faq_prompt.py` for a FAQ pipeline) or a new LLM provider that needs its own client module.
 
-### `src/guardrails/` — Non-LLM Guardrails
+### 🛡️ `src/guardrails/` — Non-LLM Guardrails
 
 **Purpose:** Rule/heuristic/schema validation for both pipelines — no LLM calls. Every guardrail returns the same `GuardrailResult` (`allow` / `sanitize` / `block`). See [Guardrails](guardrails.md) for the full contract and diagrams.
 
@@ -213,7 +228,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 **When to add a new file:** When adding a guardrail for a new pipeline (e.g. `/api/search`) — reuse `build_input_chain()` and `sanitize_text_field()` rather than duplicating logic.
 
-### `src/pipeline/` — Orchestration Layer
+### 🧵 `src/pipeline/` — Orchestration Layer
 
 **Purpose:** Wire together retrieval, scoring, and generation into end-to-end pipelines. This is the "glue" layer.
 
@@ -244,7 +259,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 **When to add a new file in `src/pipeline/`:** When creating an entirely new pipeline (e.g., `faq_pipeline.py` + `faq/` subfolder for a FAQ answering pipeline).
 
-### `src/utils/` — Shared Utilities
+### 🧰 `src/utils/` — Shared Utilities
 
 **Purpose:** Cross-cutting helpers used by multiple modules.
 
@@ -258,7 +273,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 ---
 
-## `api/` — FastAPI Layer
+## 🌐 `api/` — FastAPI Layer
 
 **Purpose:** HTTP interface to the pipeline. Thin layer — routes validate input, call pipeline factories from `deps.py`, and return JSON.
 
@@ -288,7 +303,7 @@ All domain logic lives here. This is a pure Python package with no web framework
 
 ---
 
-## `tests/` — Test Suite
+## 🧪 `tests/` — Test Suite
 
 **Purpose:** Automated tests using pytest. Unit tests mirror the `src/` and `api/` layout.
 
@@ -319,7 +334,7 @@ tests/unit/
 
 ---
 
-## `evaluation/` — RAG Quality Evaluation
+## 📊 `evaluation/` — RAG Quality Evaluation
 
 **Purpose:** Measure retrieval and generation quality against the real pipeline (embedder + vector store + LLM). Run manually to benchmark changes — these scripts are intentionally excluded from the pytest suite (see `TEST_PLAN.md`), since they need a real LLM/DB rather than mocks.
 
@@ -334,7 +349,7 @@ tests/unit/
 
 ---
 
-## `scripts/` — CLI Scripts
+## 📜 `scripts/` — CLI Scripts
 
 **Purpose:** One-off or periodic tasks run from the command line.
 
@@ -349,7 +364,7 @@ tests/unit/
 
 ---
 
-## `configs/` — Configuration Files
+## ⚙️ `configs/` — Configuration Files
 
 **Purpose:** YAML configuration files. Loaded at startup, not committed secrets.
 
@@ -364,7 +379,7 @@ tests/unit/
 
 ---
 
-## `docs/` — Documentation Source
+## 📘 `docs/` — Documentation Source
 
 **Purpose:** MkDocs Material source files. Built into a static site and deployed to GitHub Pages.
 
@@ -380,7 +395,7 @@ tests/unit/
 
 ---
 
-## `docker/` — Container Configuration
+## 🐳 `docker/` — Container Configuration
 
 **Purpose:** Docker and Compose files for containerized deployment.
 
@@ -392,7 +407,7 @@ tests/unit/
 
 ---
 
-## `data/` — Data Directory
+## 🗂️ `data/` — Data Directory
 
 **Purpose:** Raw, processed, and vector data. Partially gitignored.
 
@@ -405,7 +420,7 @@ tests/unit/
 
 ---
 
-## Key Conventions
+## 📐 Key Conventions
 
 | Convention | Rule |
 | ---------- | ---- |

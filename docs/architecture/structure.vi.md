@@ -47,9 +47,24 @@ techscout-rag-recommend/
 └── data/                       # Thư mục dữ liệu (một phần gitignored)
 ```
 
+```mermaid
+flowchart LR
+    CRAWL["🕷️ crawler/"] --> CATALOG["🗄️ catalog/"]
+    CATALOG --> INGEST["📥 ingestion/"]
+    INGEST --> EMBED["🧬 embedding/"]
+    EMBED --> RETRIEVE["🔍 retrieval/"]
+    CATALOG -. CDC/Debezium .-> SYNC["🔄 sync/"]
+    SYNC --> EMBED
+    RETRIEVE --> PIPE["🧵 pipeline/"]
+    PIPE --> GUARD["🛡️ guardrails/"]
+    GUARD --> GEN["✨ generation/"]
+    GEN --> API["🌐 api/"]
+    API --> PIPE
+```
+
 ---
 
-## File gốc
+## 📄 File gốc
 
 | File | Mục đích | Khi nào cập nhật |
 | ---- | ------- | -------------- |
@@ -63,11 +78,11 @@ techscout-rag-recommend/
 
 ---
 
-## `src/` — Logic nghiệp vụ cốt lõi
+## 📁 `src/` — Logic nghiệp vụ cốt lõi
 
 Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần túy, không phụ thuộc vào web framework — có thể dùng độc lập với FastAPI.
 
-### `src/crawler/` — Web Crawling
+### 🕷️ `src/crawler/` — Web Crawling
 
 **Mục đích:** Thu thập dữ liệu sản phẩm thô (thông số + đánh giá người mua) từ các trang thương mại điện tử vào `data/raw/crawled/`. Stack nhẹ: `httpx` + `BeautifulSoup`. Xem [hướng dẫn Crawler](../development/crawler.md) để biết toàn bộ luồng.
 
@@ -92,7 +107,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 **Khi nào thêm file mới:** Khi crawl một nguồn mới — thêm `<name>_spider.py` và một block `SourceConfig` trong `configs/crawler.yaml`.
 
-### `src/catalog/` — Source of Truth (Catalog sản phẩm)
+### 🗄️ `src/catalog/` — Source of Truth (Catalog sản phẩm)
 
 **Mục đích:** Truy cập CRUD vào bảng `product_catalog` — source of truth duy nhất mà CDC capture. Các index tìm kiếm được dẫn xuất từ nó và không bao giờ được API handler ghi trực tiếp.
 
@@ -100,7 +115,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 | ---- | -------- | ---------------------- |
 | `product_repository.py` | `ProductRepository` — create/upsert/update/delete/get/list trên `product_catalog` (SQL parameterized, `REPLICA IDENTITY FULL` cho before-image Debezium) | Khi thêm trường sản phẩm (nhớ cập nhật cả `api/schemas.py` và chunker) |
 
-### `src/ingestion/` — Nạp & chuẩn hóa dữ liệu
+### 📥 `src/ingestion/` — Nạp & chuẩn hóa dữ liệu
 
 **Mục đích:** Nạp dữ liệu sản phẩm thô từ nhiều nguồn khác nhau, làm sạch, parse thông số, và chia nhỏ thành các đơn vị phù hợp để embedding.
 
@@ -115,7 +130,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 **Khi nào thêm file mới:** Khi cần một loại nguồn dữ liệu mới (vd: `api_loader.py` cho REST API) hoặc một bước tiền xử lý mới (vd: `deduplicator.py`).
 
-### `src/embedding/` — Embedding & Vector DB
+### 🧬 `src/embedding/` — Embedding & Vector DB
 
 **Mục đích:** Chuyển văn bản thành vector và quản lý vector database (Postgres + pgvector).
 
@@ -127,7 +142,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 **Khi nào thêm file mới:** Khi thêm một chiến lược embedding mới (vd: `sparse_embedder.py` cho vector BM25) hoặc một backend vector DB mới.
 
-### `src/retrieval/` — Truy xuất & tìm kiếm sản phẩm
+### 🔍 `src/retrieval/` — Truy xuất & tìm kiếm sản phẩm
 
 **Mục đích:** Với một truy vấn người dùng, truy xuất các sản phẩm liên quan nhất từ vector store bằng cách kết hợp semantic search, khớp từ khóa, và lọc metadata.
 
@@ -144,7 +159,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 **Khi nào thêm file mới:** Khi thêm một chiến lược tìm kiếm mới (vd: `bm25_search.py`), một loại filter đủ phức tạp để cần module riêng, hoặc một thuật toán chấm điểm mới.
 
-### `src/sync/` — CDC Sync Worker
+### 🔄 `src/sync/` — CDC Sync Worker
 
 **Mục đích:** Consume stream thay đổi Debezium (Kafka) và giữ các index tìm kiếm dẫn xuất đồng bộ với catalog. Xem [Truy xuất lai](hybrid-retrieval.vi.md).
 
@@ -156,7 +171,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 | `embedding_worker.py` | `EmbeddingSyncer` — re-embed khi text đổi, update metadata-only cho giá/rating, xóa khi `d` | Khi đổi logic quyết định re-embed hoặc luồng upsert vector |
 | `runner.py` | Vòng lặp Kafka consumer — at-least-once, commit sau khi áp xong | Khi đổi ngữ nghĩa delivery hoặc xử lý lỗi |
 
-### `src/generation/` — Sinh nội dung bằng LLM
+### ✨ `src/generation/` — Sinh nội dung bằng LLM
 
 **Mục đích:** Gọi LLM provider, quản lý prompt template, parse phản hồi, và validate input/output.
 
@@ -176,7 +191,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 **Khi nào thêm file mới:** Khi tạo một loại pipeline mới (vd: `faq_prompt.py` cho pipeline FAQ) hoặc một LLM provider mới cần module client riêng.
 
-### `src/guardrails/` — Guardrail không dùng LLM
+### 🛡️ `src/guardrails/` — Guardrail không dùng LLM
 
 **Mục đích:** Validate rule/heuristic/schema cho cả hai pipeline — không gọi LLM. Mọi guardrail đều trả về cùng một `GuardrailResult` (`allow` / `sanitize` / `block`). Xem [Guardrail](guardrails.vi.md) để biết đầy đủ contract và sơ đồ.
 
@@ -213,7 +228,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 **Khi nào thêm file mới:** Khi thêm guardrail cho một pipeline mới (vd `/api/search`) — tái sử dụng `build_input_chain()` và `sanitize_text_field()` thay vì viết lại logic.
 
-### `src/pipeline/` — Tầng điều phối
+### 🧵 `src/pipeline/` — Tầng điều phối
 
 **Mục đích:** Kết nối retrieval, scoring, và generation thành các pipeline end-to-end. Đây là tầng "keo dán".
 
@@ -244,7 +259,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 **Khi nào thêm file mới trong `src/pipeline/`:** Khi tạo hẳn một pipeline mới (vd: `faq_pipeline.py` + thư mục con `faq/` cho pipeline trả lời FAQ).
 
-### `src/utils/` — Tiện ích dùng chung
+### 🧰 `src/utils/` — Tiện ích dùng chung
 
 **Mục đích:** Helper dùng chung cho nhiều module.
 
@@ -258,7 +273,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 ---
 
-## `api/` — Tầng FastAPI
+## 🌐 `api/` — Tầng FastAPI
 
 **Mục đích:** Giao diện HTTP cho pipeline. Tầng mỏng — route validate input, gọi pipeline factory từ `deps.py`, và trả về JSON.
 
@@ -288,7 +303,7 @@ Toàn bộ logic domain nằm ở đây. Đây là một Python package thuần 
 
 ---
 
-## `tests/` — Bộ test
+## 🧪 `tests/` — Bộ test
 
 **Mục đích:** Test tự động dùng pytest. Unit test phản chiếu layout của `src/` và `api/`.
 
@@ -319,7 +334,7 @@ tests/unit/
 
 ---
 
-## `evaluation/` — Đánh giá chất lượng RAG
+## 📊 `evaluation/` — Đánh giá chất lượng RAG
 
 **Mục đích:** Đo lường chất lượng retrieval và generation dựa trên pipeline thật (embedder + vector store + LLM). Chạy thủ công để benchmark các thay đổi — các script này chủ đích không nằm trong bộ pytest (xem `TEST_PLAN.md`), vì cần LLM/DB thật thay vì mock.
 
@@ -334,7 +349,7 @@ tests/unit/
 
 ---
 
-## `scripts/` — Script CLI
+## 📜 `scripts/` — Script CLI
 
 **Mục đích:** Tác vụ chạy một lần hoặc định kỳ, thực thi từ command line.
 
@@ -349,7 +364,7 @@ tests/unit/
 
 ---
 
-## `configs/` — File cấu hình
+## ⚙️ `configs/` — File cấu hình
 
 **Mục đích:** File cấu hình YAML. Được nạp khi khởi động, không phải secret được commit.
 
@@ -364,7 +379,7 @@ tests/unit/
 
 ---
 
-## `docs/` — Mã nguồn tài liệu
+## 📘 `docs/` — Mã nguồn tài liệu
 
 **Mục đích:** File nguồn MkDocs Material. Được build thành static site và deploy lên GitHub Pages.
 
@@ -380,7 +395,7 @@ tests/unit/
 
 ---
 
-## `docker/` — Cấu hình Container
+## 🐳 `docker/` — Cấu hình Container
 
 **Mục đích:** File Docker và Compose cho triển khai containerized.
 
@@ -392,7 +407,7 @@ tests/unit/
 
 ---
 
-## `data/` — Thư mục dữ liệu
+## 🗂️ `data/` — Thư mục dữ liệu
 
 **Mục đích:** Dữ liệu thô, đã xử lý, và vector. Một phần được gitignore.
 
@@ -405,7 +420,7 @@ tests/unit/
 
 ---
 
-## Quy ước chính
+## 📐 Quy ước chính
 
 | Quy ước | Quy tắc |
 | ---------- | ---- |
